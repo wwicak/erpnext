@@ -1,0 +1,74 @@
+{
+  "build": {
+    "devPath": "../src",
+    "distDir": "../src",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "package": {
+    "productName": "Tauri Offline POS",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "fs": {
+        "all": false,
+        "readFile": true,
+        "writeFile": true,
+        "readDir": true,
+        "copyFile": true,
+        "createDir": true,
+        "removeDir": true,
+        "removeFile": true,
+        "renameFile": true,
+        "exists": true,
+        "scope": ["$APP/*"] 
+      },
+      "window": {
+        "all": true 
+      },
+      "shell": {
+        "all": false,
+        "open": true
+      },
+      "http": {
+        "all": true, 
+        "request": true,
+        "scope": ["http://*", "https://*"] 
+      },
+      "dialog": {
+        "all": true 
+      },
+      "notification": {
+        "all": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "identifier": "com.tauri.offline.pos",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ]
+    },
+    "security": {
+      "csp": null
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "Tauri Offline POS",
+        "width": 1200,
+        "height": 800
+      }
+    ],
+    "updater": {
+      "active": false
+    }
+  }
+}

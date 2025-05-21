@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline POS</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Offline POS Terminal</h1>
+            <div class.sync-controls">
+                <input type="text" id="erpnextUrl" placeholder="ERPNext URL (e.g., http://localhost:8000)">
+                <input type="text" id="posProfileName" placeholder="POS Profile Name">
+                <input type="text" id="companyName" placeholder="Company Name">
+                <button id="configureSyncBtn">Save Config</button>
+                <button id="syncDataBtn">Sync Initial Data</button>
+                <p id="syncStatus"></p>
+            </div>
+        </header>
+
+        <main class="pos-layout">
+            <section class="item-selection-panel">
+                <h2>Items</h2>
+                <input type="text" id="itemSearch" placeholder="Search items by name or code...">
+                <div id="itemList" class="item-list">
+                    <!-- Items will be populated here by ui.js -->
+                </div>
+            </section>
+
+            <section class="transaction-panel">
+                <h2>Cart</h2>
+                <div class="customer-selection">
+                    <label for="customerSearch">Customer:</label>
+                    <input type="text" id="customerSearch" placeholder="Search customers...">
+                    <div id="customerList" class="customer-list-dropdown">
+                        <!-- Customer suggestions will appear here -->
+                    </div>
+                    <p>Selected Customer: <span id="selectedCustomerName">Walk-in</span></p>
+                    <input type="hidden" id="selectedCustomer" value="Walk-in"> <!-- Default customer -->
+                </div>
+
+                <div id="cartItems" class="cart-items-list">
+                    <!-- Cart items will be populated here -->
+                </div>
+
+                <div class="totals-section">
+                    <p>Subtotal: <span id="cartSubtotal">0.00</span></p>
+                    <p>Taxes (Dummy): <span id="cartTaxes">0.00</span></p>
+                    <p><strong>Grand Total: <span id="cartGrandTotal">0.00</span></strong></p>
+                </div>
+
+                <div class="payment-section">
+                    <h3>Payment</h3>
+                    <select id="paymentMode">
+                        <!-- Payment modes will be populated here -->
+                    </select>
+                    <input type="number" id="paymentAmount" placeholder="Amount">
+                    <button id="addPaymentBtn">Add Payment</button>
+                    <div id="paymentsList">
+                        <!-- Applied payments will be shown here -->
+                    </div>
+                    <p>Total Paid: <span id="totalPaidAmount">0.00</span></p>
+                    <p>Change/Balance: <span id="changeAmount">0.00</span></p>
+                </div>
+
+                <button id="completeSaleBtn" class="complete-sale-btn">Complete Sale</button>
+                <button id="clearCartBtn" class="clear-cart-btn">Clear Cart</button>
+
+            </section>
+        </main>
+    </div>
+
+    <!-- Assuming Dexie.js is available globally -->
+    <!-- In a real build, you'd bundle this or use ES modules -->
+    <!-- <script src="path/to/dexie.min.js"></script> --> 
+    <script src="db.js"></script>
+    <script src="sync.js"></script>
+    <script src="cart.js"></script>
+    <script src="ui.js"></script>
+    <script src="pos_logic.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
