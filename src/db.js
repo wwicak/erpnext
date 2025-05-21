@@ -18,6 +18,7 @@ db.version(1).stores({
     // Add more indexes as needed for searching/filtering common fields.
     // Example: items: "&item_code, item_name, item_group, brand, *tags"
     // Example: customers: "&name, customer_name, customer_group, *tags"
+    held_carts: "++id, held_at, name" // Auto-incrementing ID, timestamp, optional name for cart
 });
 
 // --- Database Interaction Functions ---
@@ -86,6 +87,23 @@ async function getItemByCode(itemCode) {
     return await db.items.get(itemCode);
 }
 
+async function getItemByBarcode(barcode) {
+    // Assumes 'barcodes_searchable' is an array of barcode strings on the item object
+    // or 'barcode' is a single string field if items have only one primary barcode.
+    // If items have a child table like structure e.g. item.barcodes = [{barcode: '123'}, {barcode: '456'}]
+    // then the 'barcodes_searchable' field should be created during data processing in sync.js
+    // For now, let's assume 'barcodes_searchable' is correctly populated as an array.
+    const items = await db.items.where('barcodes_searchable').equals(barcode).toArray();
+    if (items && items.length > 0) {
+        if (items.length > 1) {
+            console.warn(`Multiple items found for barcode ${barcode}. Returning the first one.`, items);
+        }
+        return items[0];
+    }
+    return null; 
+}
+
+
 // --- Item Prices ---
 async function getItemPrice(itemCode, priceList) {
     return await db.item_prices
@@ -137,13 +155,59 @@ async function getPendingTransactions() {
 async function updateTransactionStatus(id, sync_status, error_message = null) {
     let updateData = { sync_status: sync_status };
     if (error_message) updateData.error_message = error_message;
+    // Dexie's update uses primary key. If 'id' is the Dexie auto-incremented primary key for offline_transactions, this is fine.
+    // If 'id' refers to 'offline_id', then it should be:
+    // return await db.offline_transactions.where('offline_id').equals(id).modify(updateData);
+    // Assuming 'id' is the primary key from `++id` for now.
     return await db.offline_transactions.update(id, updateData);
 }
 
 
-// Make db instance available, e.g. by exporting or attaching to window for simple scripts
-window.db = db; 
-window.replaceAllData = replaceAllData;
-window.replaceAllItems = replaceAllItems; // if using specific item processing
+// --- Held Carts ---
+async function saveHeldCart(cartData, name = null) {
+    const now = new Date().toISOString();
+    const cartNameToSave = name || `Cart held at ${new Date(now).toLocaleTimeString()}`;
+    return await db.held_carts.add({
+        name: cartNameToSave,
+        held_at: now,
+        cart_data: cartData // cartData should include items, customer, totals, etc.
+    });
+}
 
-console.log("OfflinePOSDB Initialized with Dexie.js");
+async function getAllHeldCarts() {
+    return await db.held_carts.orderBy('held_at').reverse().toArray(); // Show newest first
+}
+
+async function getHeldCart(id) {
+    return await db.held_carts.get(parseInt(id)); // Ensure ID is number if from data-attribute
+}
+
+async function deleteHeldCart(id) {
+    return await db.held_carts.delete(parseInt(id)); // Ensure ID is number
+}
+
+
+// Make db instance available, e.g. by exporting or attaching to window for simple scripts
+window.db = db; // Exposing Dexie instance
+// Exposing specific functions for easier access from other scripts
+window.replaceAllData = replaceAllData;
+window.replaceAllItems = replaceAllItems; 
+window.searchItems = searchItems;
+window.getItemByCode = getItemByCode;
+window.getItemByBarcode = getItemByBarcode; // Exposed
+window.getItemPrice = getItemPrice;
+window.searchCustomers = searchCustomers;
+window.getCustomerByName = getCustomerByName;
+window.getStockLevel = getStockLevel;
+window.getAllPaymentModes = getAllPaymentModes;
+window.saveOfflineTransaction = saveOfflineTransaction;
+window.getPendingTransactions = getPendingTransactions;
+window.updateTransactionStatus = updateTransactionStatus;
+// Held Cart functions
+window.saveHeldCart = saveHeldCart;
+window.getAllHeldCarts = getAllHeldCarts;
+window.getHeldCart = getHeldCart;
+window.deleteHeldCart = deleteHeldCart;
+
+
+console.log("OfflinePOSDB Initialized with Dexie.js and helper functions exposed.");

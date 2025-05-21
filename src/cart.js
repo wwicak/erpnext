@@ -203,5 +203,20 @@ window.cart = {
     getCartItems,
     getCartTotals,
     clearCart,
-    recalculateCartPrices
+    recalculateCartPrices,
+    loadCart // Exposed for pos_logic.js
 };
+
+// Function to load an entire cart state (e.g., when resuming a held cart)
+function loadCart(cartDataObject) {
+    if (cartDataObject && cartDataObject.items) {
+        currentCartItems = cartDataObject.items; // Directly replace current items
+        // Customer and payments are handled by pos_logic.js when resuming
+    } else {
+        console.error("Invalid cart data object provided to loadCart.");
+        currentCartItems = []; // Reset to empty if data is invalid
+    }
+    // UI update will be triggered by the calling function (e.g., resumeCart in pos_logic.js after it sets customer/payments)
+    // For immediate consistency, can call displayCart, but it might be redundant if called again after customer/payments restored.
+    window.ui.displayCart(); 
+}

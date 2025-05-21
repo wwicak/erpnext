@@ -1,161 +1,173 @@
-<div align="center">
-    <a href="https://frappe.io/erpnext">
-	<img src="./erpnext/public/images/v16/erpnext.svg" alt="ERPNext Logo" height="80px" width="80xp"/>
-    </a>
-    <h2>ERPNext</h2>
-    <p align="center">
-        <p>Powerful, Intuitive and Open-Source ERP</p>
-    </p>
+# Tauri Offline POS Application
 
-[![Learn on Frappe School](https://img.shields.io/badge/Frappe%20School-Learn%20ERPNext-blue?style=flat-square)](https://frappe.school)<br><br>
-[![CI](https://github.com/frappe/erpnext/actions/workflows/server-tests-mariadb.yml/badge.svg?event=schedule)](https://github.com/frappe/erpnext/actions/workflows/server-tests-mariadb.yml)
-[![docker pulls](https://img.shields.io/docker/pulls/frappe/erpnext-worker.svg)](https://hub.docker.com/r/frappe/erpnext-worker)
+This application provides an offline-first Point of Sale (POS) interface that syncs with an ERPNext backend. It allows users to conduct sales even when network connectivity is unavailable and syncs transactions once connectivity is restored.
 
-</div>
+## Features
 
-<div align="center">
-	<img src="./erpnext/public/images/v16/hero_image.png"/>
-</div>
+*   **Offline First:** Core POS operations (browsing items, creating sales, processing payments) are available without an active internet connection.
+*   **ERPNext Integration:** Synchronizes products, pricing, customers, and transactions with your ERPNext instance.
+*   **User Authentication:** Secure login for POS attendants, with session logging on the backend.
+*   **Barcode Scanning:** Quickly add items to the cart using a barcode scanner (keyboard wedge type).
+*   **Enhanced Quantity Input:** Easily adjust item quantities in the cart using typed input or +/- buttons.
+*   **Price Check:** Look up item prices without adding them to the cart.
+*   **Hold & Resume Cart:** Save in-progress sales and resume them later.
+*   **Default Customer:** Streamlined workflow with a configurable default "Walk-in Customer".
+*   **Local Data Storage:** Uses IndexedDB to store POS data locally on the device.
 
-<div align="center">
-	<a href="https://erpnext-demo.frappe.cloud/api/method/erpnext_demo.erpnext_demo.auth.login_demo">Live Demo</a>
-	-
-	<a href="https://frappe.io/erpnext">Website</a>
-	-
-	<a href="https://docs.frappe.io/erpnext/">Documentation</a>
-</div>
+## Prerequisites
 
-## ERPNext
+To develop and build the Tauri Offline POS application, you will need:
 
-100% Open-Source ERP system to help you run your business.
+*   **Node.js and npm (or yarn/pnpm):** For managing frontend dependencies and running scripts.
+    *   [Node.js Download](https://nodejs.org/)
+*   **Rust:** The backend of the Tauri application is written in Rust.
+    *   [Install Rust](https://www.rust-lang.org/tools/install)
+*   **Tauri CLI Prerequisites:** System-specific dependencies (e.g., WebView2 for Windows, WebKitGTK for Linux, Xcode Command Line Tools for macOS).
+    *   Follow the "Prerequisites" guide on the [official Tauri website](https://tauri.app/v1/guides/getting-started/prerequisites).
+*   **Tauri CLI:**
+    ```bash
+    npm install -g @tauri-apps/cli
+    # or
+    yarn global add @tauri-apps/cli
+    ```
 
-### Motivation
+## Development
 
-Running a business is a complex task - handling invoices, tracking stock, managing personnel and even more ad-hoc activities. In a market where software is sold separately to manage each of these tasks, ERPNext does all of the above and more, for free.
+1.  **Clone the repository (if applicable).**
+2.  **Install frontend dependencies:**
+    ```bash
+    npm install
+    # or
+    yarn install
+    ```
+3.  **Run the application in development mode:**
+    ```bash
+    npm run tauri dev
+    # or
+    yarn tauri dev
+    ```
+    This will open the application window. Changes to frontend code (in `src/`) should trigger hot reloading.
 
-### Key Features
+## Building for Production
 
-- **Accounting**: All the tools you need to manage cash flow in one place, right from recording transactions to summarizing and analyzing financial reports.
-- **Order Management**: Track inventory levels, replenish stock, and manage sales orders, customers, suppliers, shipments, deliverables, and order fulfillment.
-- **Manufacturing**: Simplifies the production cycle, helps track material consumption, exhibits capacity planning, handles subcontracting, and more!
-- **Asset Management**: From purchase to perishment, IT infrastructure to equipment. Cover every branch of your organization, all in one centralized system.
-- **Projects**: Delivery both internal and external Projects on time, budget and Profitability. Track tasks, timesheets, and issues by project.
+To build the application for your target operating system:
 
-<details open>
-
-<summary>More</summary>
-	<img src="https://erpnext.com/files/v16_bom.png"/>
-	<img src="https://erpnext.com/files/v16_stock_summary.png"/>
-	<img src="https://erpnext.com/files/v16_job_card.png"/>
-	<img src="https://erpnext.com/files/v16_tasks.png"/>
-</details>
-
-### Under the Hood
-
-- [**Frappe Framework**](https://github.com/frappe/frappe): A full-stack web application framework written in Python and Javascript. The framework provides a robust foundation for building web applications, including a database abstraction layer, user authentication, and a REST API.
-
-- [**Frappe UI**](https://github.com/frappe/frappe-ui): A Vue-based UI library, to provide a modern user interface. The Frappe UI library provides a variety of components that can be used to build single-page applications on top of the Frappe Framework.
-
-## Production Setup
-
-### Managed Hosting
-
-You can try [Frappe Cloud](https://frappecloud.com), a simple, user-friendly and sophisticated [open-source](https://github.com/frappe/press) platform to host Frappe applications with peace of mind.
-
-It takes care of installation, setup, upgrades, monitoring, maintenance and support of your Frappe deployments. It is a fully featured developer platform with an ability to manage and control multiple Frappe deployments.
-
-<div>
-	<a href="https://erpnext-demo.frappe.cloud/app/home" target="_blank">
-		<picture>
-			<source media="(prefers-color-scheme: dark)" srcset="https://frappe.io/files/try-on-fc-white.png">
-			<img src="https://frappe.io/files/try-on-fc-black.png" alt="Try on Frappe Cloud" height="28" />
-		</picture>
-	</a>
-</div>
-
-
-
-### Self-Hosted
-#### Docker
-
-Prerequisites: docker, docker-compose, git. Refer [Docker Documentation](https://docs.docker.com) for more details on Docker setup.
-
-Run following commands:
-
-```
-git clone https://github.com/frappe/frappe_docker
-cd frappe_docker
-docker compose -f pwd.yml up -d
+```bash
+npm run tauri build
+# or
+yarn tauri build
 ```
 
-After a couple of minutes, site should be accessible on your localhost port: 8080. Use below default login credentials to access the site.
-- Username: Administrator
-- Password: admin
+Build artifacts (e.g., `.msi` for Windows, `.AppImage` or `.deb` for Linux, `.dmg` for macOS) will be in `src-tauri/target/release/bundle/`.
 
-See [Frappe Docker](https://github.com/frappe/frappe_docker?tab=readme-ov-file#to-run-on-arm64-architecture-follow-this-instructions) for ARM based docker setup.
+## Initial Setup & Configuration
 
+### 1. ERPNext Backend Setup
+Ensure the corresponding `erpnext.pos_custom_api` Python module is installed on your ERPNext instance. This module provides the necessary API endpoints for the POS application. Refer to `POS_CUSTOM_API.md` for details.
+You will also need to manually create the following in ERPNext:
+*   **DocType:** `POS Session Log` (see `POS_CUSTOM_API.md` for schema).
+*   **Custom Fields:**
+    *   On `Sales Invoice` and/or `POS Invoice`: `custom_pos_attendant` (Link to User).
+    *   On `Selling Settings`: `pos_walk_in_customer` (Link to Customer).
 
-## Development Setup
-### Manual Install
+### 2. Tauri Application Configuration
 
-The Easy Way: our install script for bench will install all dependencies (e.g. MariaDB). See https://github.com/frappe/bench for more details.
+Upon first launch, you need to configure the application:
 
-New passwords will be created for the ERPNext "Administrator" user, the MariaDB root user, and the frappe user (the script displays the passwords and saves them to ~/frappe_passwords.txt).
+*   **ERPNext Server URL:** Enter the full URL of your ERPNext server (e.g., `https://your-erp.com` or `http://localhost:8000`). This field is located in the header bar of the main POS interface.
+*   Click **"Save Sync Config"** after entering the URL. This setting is stored locally.
 
+## User Authentication & Login
 
-### Local
+Before accessing the main POS interface, users must log in:
 
-To setup the repository locally follow the steps mentioned below:
+1.  **Launch the application.** You will be presented with a login screen.
+2.  **Username:** Enter your ERPNext username.
+3.  **Password:** Enter your ERPNext password.
+4.  **POS Profile:** Enter the exact name of the POS Profile configured in ERPNext that this terminal session should use. This profile dictates settings like default warehouse, pricing, available payment modes, etc.
+5.  Click **"Login"**.
 
-1. Setup bench by following the [Installation Steps](https://frappeframework.com/docs/user/en/installation) and start the server
-   ```
-   bench start
-   ```
+Upon successful authentication:
+*   The main POS interface will be displayed.
+*   Your full name and the active POS Profile name will be shown in the header.
+*   An initial data synchronization process will be automatically triggered to fetch data relevant to the logged-in POS Profile.
 
-2. In a separate terminal window, run the following commands:
-   ```
-   # Create a new site
-   bench new-site erpnext.localhost
-   ```
+### Logout
+*   To log out, click the **"Logout"** button in the header.
+*   This will clear your session and return you to the login screen.
 
-3. Get the ERPNext app and install it
-   ```
-   # Get the ERPNext app
-   bench get-app https://github.com/frappe/erpnext
+## Usage Guide
 
-   # Install the app
-   bench --site erpnext.localhost install-app erpnext
-   ```
+### 1. Initial Data Sync
+*   After a successful login, an initial data sync is automatically attempted.
+*   You can also manually trigger a sync or update sync configurations (ERPNext URL, POS Profile for sync, Company for sync) using the controls in the header bar of the main POS interface.
+*   Click **"Sync Initial Data"** to fetch/update local data stores (items, customers, prices, etc.).
+*   A status message will indicate progress and completion. This step is crucial for offline functionality.
 
-4. Open the URL `http://erpnext.localhost:8000/app` in your browser, you should see the app running
+### 2. Customer Handling
+*   Customer selection is optional.
+*   By default, sales will be associated with a "Walk-in Customer". This default is configured in ERPNext (either in the POS Profile or globally in Selling Settings).
+*   The name of the active customer (e.g., "Walk-in Customer" or a selected customer's name) is displayed in the cart panel.
+*   (Note: The UI for searching and selecting specific customers is currently hidden to streamline the process but can be re-enabled for future needs).
 
-## Learning and community
+### 3. Adding Items to Cart
+*   **Searching:** Use the search bar in the "Items" panel to find items by name or code.
+*   **Barcode Scanning:**
+    *   Ensure your cursor is not in an input field where you intend to type text (e.g., payment amount). The item search bar can also accept barcode scans.
+    *   Simply scan the item's barcode. Most barcode scanners emulate keyboard input, typing the barcode number and pressing "Enter".
+    *   If the barcode is found in the local database, the item will be added to the cart, or its quantity incremented if already present.
+*   **Clicking Item Card:** Click on an item card from the displayed list to add it to the cart.
+*   **Quantity Input:**
+    *   Once an item is in the cart, its quantity can be adjusted:
+        *   Directly type the desired quantity into the number field next to the item.
+        *   Use the "+" and "-" buttons to increment or decrement the quantity.
+    *   Scanning an item that is already in the cart will increment its quantity by one.
+*   **Stock Warnings:** If local stock data indicates insufficient quantity (and server settings disallow negative stock), a warning `alert` may appear. You can still add the item to the cart, but it might fail during server sync if stock is truly unavailable.
 
-1. [Frappe School](https://school.frappe.io) - Learn Frappe Framework and ERPNext from the various courses by the maintainers or from the community.
-2. [Official documentation](https://docs.erpnext.com/) - Extensive documentation for ERPNext.
-3. [Discussion Forum](https://discuss.erpnext.com/) - Engage with community of ERPNext users and service providers.
-4. [Telegram Group](https://erpnext_public.t.me) - Get instant help from huge community of users.
+### 4. Price Check
+*   Click the **"Price Check"** button in the "Items" panel.
+*   A modal window will appear.
+*   Scan a barcode or type an item code/name into the input field and click "Lookup" (or press Enter).
+*   The item's details and its price (based on the current POS Profile and default customer context) will be displayed without adding the item to the cart.
+*   Close the modal using the "×" button.
 
+### 5. Hold & Resume Cart
+*   **Holding a Cart:**
+    *   If you need to temporarily suspend a transaction (e.g., customer forgot their wallet), click the **"Hold Cart"** button.
+    *   You may be prompted to enter an optional name for the held cart (e.g., customer's name) for easier identification.
+    *   The current cart (items, customer, any partial payments) will be saved locally, and the main cart interface will be cleared.
+*   **Viewing & Resuming Carts:**
+    *   Click the **"View/Resume Carts"** button.
+    *   A modal will display a list of all currently held carts, showing when they were held and any name given.
+    *   To resume a cart: Click the "Resume" button next to the desired cart. You'll be asked to confirm if your current cart isn't empty. The selected cart's contents (items, customer, payments) will be loaded, and it will be removed from the held list.
+    *   To delete a held cart: Click the "Delete" button. You'll be asked to confirm.
 
-## Contributing
+### 6. Processing Payments & Completing Sale
+*   Select a payment mode from the dropdown.
+*   Enter the amount paid. Click "Add Payment." Multiple payments can be added.
+*   Total paid and change/balance are displayed.
+*   Click **"Complete Sale"**. The transaction is saved locally with a `sync_status: 'pending'`.
+*   An alert confirms the offline sale. If a potential local stock issue was noted (item quantity exceeded local snapshot when negative stock is disallowed by server), this may be mentioned.
 
-1. [Issue Guidelines](https://github.com/frappe/erpnext/wiki/Issue-Guidelines)
-1. [Report Security Vulnerabilities](https://erpnext.com/security)
-1. [Pull Request Requirements](https://github.com/frappe/erpnext/wiki/Contribution-Guidelines)
-2. [Translations](https://crowdin.com/project/frappe)
+### 7. Syncing Offline Transactions
+*   (Currently, explicit UI for triggering sync of pending transactions is minimal).
+*   Offline transactions are intended to be synced with the ERPNext server when connectivity is available. This typically involves a background process or a manual "Sync Pending Sales" button (future enhancement).
+*   The `syncOfflineTransactions` API on the backend handles the actual creation of ERPNext invoices from these local records, including setting the POS attendant ID.
 
+## Local Data Storage (IndexedDB)
 
-## Logo and Trademark Policy
+The application uses IndexedDB (via Dexie.js) to store data locally for offline use:
 
-Please read our [Logo and Trademark Policy](TRADEMARK_POLICY.md).
+*   **`pos_profiles`**: Configuration of the POS terminal.
+*   **`items`**: Product catalog, including details, UOMs, `barcodes_searchable` array.
+*   **`item_prices`**: Pricing rules.
+*   **`customers`**: Customer information.
+*   **`warehouses`**: Warehouse details.
+*   **`stock_levels`**: Snapshots of item quantities.
+*   **`payment_modes`**: Available payment methods.
+*   **`tax_templates`**: Tax templates.
+*   **`company_settings`**: ERPNext company settings (e.g., `allow_negative_stock`, `pos_walk_in_customer`).
+*   **`offline_transactions`**: Sales made while offline.
+*   **`held_carts`**: Temporarily saved carts.
 
-<br />
-<br />
-<div align="center" style="padding-top: 0.75rem;">
-	<a href="https://frappe.io" target="_blank">
-		<picture>
-			<source media="(prefers-color-scheme: dark)" srcset="https://frappe.io/files/Frappe-white.png">
-			<img src="https://frappe.io/files/Frappe-black.png" alt="Frappe Technologies" height="28"/>
-		</picture>
-	</a>
-</div>
+This local data enables the POS to function without an active internet connection.

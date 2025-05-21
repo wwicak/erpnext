@@ -2,7 +2,53 @@
 
 This document details the custom API endpoints created in `erpnext.pos_custom_api` for the Offline POS application. These endpoints facilitate data synchronization between the ERPNext server and the offline-capable POS terminals.
 
-## 1. `get_initial_pos_data`
+## 1. `pos_login`
+
+*   **Endpoint:** `/api/method/erpnext.pos_custom_api.pos_login`
+*   **Purpose:** Authenticates a POS user against ERPNext credentials and creates a session log entry for auditing purposes. Optionally associates the login with a specific POS Profile.
+*   **Method:** `POST`
+*   **Parameters:**
+    *   `usr` (String, Mandatory): The User ID (typically email address) of the user attempting to log in.
+    *   `pwd` (String, Mandatory): The password for the user.
+    *   `pos_profile_name` (String, Optional): The name of the POS Profile this login session is associated with. This can be used for logging and context.
+*   **Request Body Structure:**
+    ```json
+    {
+        "usr": "pos_attendant@example.com",
+        "pwd": "securepassword123",
+        "pos_profile_name": "Shop A POS"
+    }
+    ```
+*   **Successful Response Example (200 OK):**
+    ```json
+    {
+        "message": "Authentication Success",
+        "user_id": "pos_attendant@example.com",
+        "full_name": "POS Attendant Name",
+        "session_csrf_token": "abcdef1234567890" 
+    }
+    ```
+*   **Error Response Example (401 Unauthorized - Authentication Failed):**
+    ```json
+    {
+        "error": "Invalid login credentials", 
+        "error_title": "Authentication Failed"
+    }
+    ```
+*   **Error Response Example (500 Internal Server Error - Other issues):**
+    ```json
+    {
+        "error": "An unexpected error occurred during login.",
+        "error_title": "Login Error"
+    }
+    ```
+*   **Key Validations/Logic:**
+    *   Uses `frappe.login_manager.authenticate` for standard ERPNext authentication.
+    *   (Optional, currently commented out in code): Can be configured to check if the authenticated user has a specific role (e.g., "POS Attendant").
+    *   On successful authentication, creates a `POS Session Log` entry with `event_type="Login"`.
+    *   Returns user details and a `session_csrf_token` which might be needed for subsequent authenticated API calls if not using cookie-based sessions for all requests.
+
+## 2. `get_initial_pos_data`
 
 *   **Endpoint:** `/api/method/erpnext.pos_custom_api.get_initial_pos_data`
 *   **Purpose:** Fetches all essential master data required for a POS terminal to start operating offline. This includes POS profile settings, items, prices, stock levels, customers, and other relevant configurations.
@@ -78,9 +124,11 @@ This document details the custom API endpoints created in `erpnext.pos_custom_ap
 *   **Key Validations/Logic:**
     *   Validates that the POS Profile exists and belongs to the specified company.
     *   Fetches data based on POS Profile configurations (e.g., item groups, customer groups, specified warehouse).
-    *   Includes `allow_negative_stock` from global `Stock Settings`.
+    *   Includes `allow_negative_stock` from global `Stock Settings` in `company_settings`.
+    *   **Customer Data:** Ensures that the default "Walk-in Customer" (from `POS Profile.customer` or `Selling Settings.pos_walk_in_customer`) is included in the customer list if they exist and are part of the company, even if disabled (as defaults might need to be selectable).
+    *   **Item Data:** Item objects include a `barcodes_searchable` array field (populated from `Item Barcode` child table or direct barcode field) to facilitate efficient barcode lookups on the client-side. Item objects also include a `uoms` array with UOMs and their conversion factors.
 
-## 2. `sync_offline_transactions`
+## 3. `sync_offline_transactions`
 
 *   **Endpoint:** `/api/method/erpnext.pos_custom_api.sync_offline_transactions`
 *   **Purpose:** Syncs a list of transactions created offline on a POS terminal to the ERPNext server. It attempts to create POS Invoices (or Sales Invoices based on configuration) for each transaction.
@@ -89,15 +137,17 @@ This document details the custom API endpoints created in `erpnext.pos_custom_ap
     *   `transactions_list` (list of objects, required): A list where each object represents an offline transaction.
     *   `pos_profile_name` (string, required): The name of the POS Profile from which these transactions originated.
     *   `company` (string, required): The company associated with the POS Profile.
+    *   `attendant_user_id` (string, optional): The User ID of the logged-in POS attendant who processed the transactions.
 *   **Request Body Structure:**
     ```json
     {
         "pos_profile_name": "My Shop POS",
         "company": "My Company LLC",
+        "attendant_user_id": "pos_user@example.com", // Optional
         "transactions_list": [
             {
                 "name": "OFFLINE-TX-001", // Temporary offline ID for reference
-                "customer": "Walk-in", // or Customer Name
+                "customer": "", // Can be empty if default customer is to be used
                 "posting_date": "2024-03-15",
                 "posting_time": "10:30:00",
                 "currency": "USD",
@@ -157,13 +207,15 @@ This document details the custom API endpoints created in `erpnext.pos_custom_ap
 *   **Key Validations/Logic:**
     *   Validates POS Profile and Company.
     *   Determines whether to create `POS Invoice` or `Sales Invoice` based on `Accounts Settings.use_sales_invoice_in_pos`.
-    *   **Performs rigorous real-time stock validation for each item *before* inserting the invoice document**, considering global `Stock Settings.allow_negative_stock`. If validation fails, the transaction is rejected.
+    *   **Default Customer Fallback:** If `customer` is not provided in an individual transaction object, the system attempts to assign a default customer. The lookup order is: 1. `POS Profile.customer`, 2. `Selling Settings.pos_walk_in_customer` (custom field).
+    *   **Attendant ID:** If `attendant_user_id` is provided and the target invoice doctype has a `custom_pos_attendant` field, this field is set with the provided User ID.
+    *   **Stock Validation:** Performs rigorous real-time stock validation for each item *before* inserting the invoice document, considering global `Stock Settings.allow_negative_stock`. If validation fails, the transaction is rejected.
     *   Maps fields from the transaction payload to the ERPNext invoice document.
     *   Derives payment accounts and item income/cost center accounts based on defaults if not provided.
     *   Calls standard ERPNext document validation methods (`set_missing_values`, controller validations like `validate_selling_price_list`, `validate_items`, `calculate_taxes_and_totals`, etc.) before insertion and submission.
     *   If insertion is successful but submission fails, attempts to delete the draft document to prevent orphaned drafts.
 
-## 3. `get_updated_master_data`
+## 4. `get_updated_master_data`
 
 *   **Endpoint:** `/api/method/erpnext.pos_custom_api.get_updated_master_data`
 *   **Purpose:** Fetches master data that has been created or modified since a specified timestamp. Also includes information about deleted documents.
@@ -214,8 +266,21 @@ This document details the custom API endpoints created in `erpnext.pos_custom_ap
     *   Applies specific filters for certain DocTypes (e.g., item groups for Items, relevant price lists for Item Prices).
     *   For certain DocTypes (like `POS Profile`, `Sales Taxes and Charges Template`, `Payment Mode`), it fetches the full document dictionary if updated, to include child table data.
     *   Fetches deleted document entries from `tabDeleted Document` based on their creation timestamp and if the `deleted_doctype` is in the tracked list.
+
+## Appendix
+
+### A.1. `POS Session Log` Doctype
+
+*   **Purpose:** Logs POS user login and logout events for auditing. This Doctype needs to be manually created in ERPNext if it doesn't exist.
+*   **Key Fields:**
+    *   `user` (Link to User, Mandatory): The user who performed the action.
+    *   `event_type` (Select, Mandatory; Options: "Login", "Logout"): The type of event being logged.
+    *   `timestamp` (Datetime, Mandatory; Default: Now): The exact date and time of the event.
+    *   `pos_profile` (Link to POS Profile, Optional): The POS Profile associated with the session, if applicable.
+    *   `ip_address` (Data, Optional): The IP address from which the user initiated the session.
+    *   `notes` (Small Text, Optional): Any additional notes related to the session event (e.g., successful login, failed attempt details if logged).
+*   **Permissions:** System Manager should have full access. Other roles may be granted read or create access as needed. Log entries are typically created by the system/API on behalf of the user.
+
 ---
 
-This documentation should provide a good starting point for developers using the API and for understanding its functionality.Okay, I have created `README.md` and `POS_CUSTOM_API.md`.
-
-Now, I will create the third deliverable: an outline of the deployment strategy and auto-update considerations. I will create this as a new file named `DEPLOYMENT_CONSIDERATIONS.md`.
+This documentation should provide a good starting point for developers using the API and for understanding its functionality.
