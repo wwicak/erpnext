@@ -91,6 +91,122 @@ def log_pos_session_event(user, event_type, pos_profile=None, ip_address=None, n
         frappe.log_error(message=frappe.get_traceback(), title="Failed to create POS Session Log")
 
 
+# --- Receipt Template ---
+@frappe.whitelist()
+def get_receipt_template_details(pos_profile_name=None, company=None):
+    """
+    Fetches POS Receipt Template details.
+    Priority:
+    1. Template directly linked to the given POS Profile.
+    2. Default template for the company (if POS Profile not given or no template linked to it).
+    3. Hardcoded system default if no specific or company default is found.
+    """
+    if not company and pos_profile_name:
+        company = frappe.db.get_value("POS Profile", pos_profile_name, "company")
+    
+    if not company:
+        # Attempt to get current user's company if no other company context
+        # This part is tricky as API calls might not always have a logged-in user session in the same way UI does.
+        # For robustness, it's better if company is explicitly passed or derived from a mandatory pos_profile_name.
+        # Fallback to current session user's company as a last resort.
+        if frappe.session.user != "Guest": # type: ignore
+            company = frappe.get_cached_value("User", frappe.session.user, "company") # type: ignore
+        
+        if not company: # If still no company after checking session user
+            frappe.throw(_("Company is required to fetch receipt template and could not be determined."), frappe.ValidationError)
+
+    # Check if POS Receipt Template Doctype exists
+    if not frappe.db.exists("DocType", "POS Receipt Template"):
+        frappe.log_message("POS Custom API", "POS Receipt Template Doctype not found. Returning system default.", level=frappe.LOG_WARNING)
+        return _get_system_default_receipt_template(company) # Pass company for placeholders
+
+    template = None
+    # 1. Try to get template specific to the POS Profile
+    if pos_profile_name:
+        template = frappe.db.get_value("POS Receipt Template", 
+                                       {"pos_profile": pos_profile_name, "company": company, "disabled": 0}, 
+                                       "*", as_dict=True)
+    
+    # 2. If not found, try to get company default template
+    if not template:
+        template = frappe.db.get_value("POS Receipt Template", 
+                                       {"is_default": 1, "company": company, "disabled": 0}, 
+                                       "*", as_dict=True)
+    
+    # 3. If still not found, return hardcoded system default
+    if not template:
+        frappe.log_message("POS Custom API", f"No specific or company default POS Receipt Template found for Company {company}. Returning system default.", level=frappe.LOG_INFO)
+        return _get_system_default_receipt_template(company)
+    
+    # Ensure header_logo URL is correctly formed if it exists
+    if template.get("header_logo") and not template.header_logo.startswith(("/files/", "http")):
+        template.header_logo = "/files/" + template.header_logo.lstrip("/")
+
+    return template
+
+def _get_system_default_receipt_template(company_name=None):
+    """Returns a hardcoded basic receipt template, populating company placeholders if company_name is provided."""
+    company_doc = None
+    company_address_str = ""
+    company_phone_str = ""
+    resolved_company_name = "Your Company" # Fallback placeholder name
+    
+    if company_name:
+        try:
+            company_doc = frappe.get_cached_doc("Company", company_name)
+            resolved_company_name = company_doc.company_name or resolved_company_name
+            if company_doc.company_address:
+                # Fetch address details as a dict to avoid issues if Address doc is not available in some contexts
+                addr_details = frappe.db.get_value("Address", company_doc.company_address, 
+                                                   ["address_line1", "address_line2", "city", "state", "pincode"], 
+                                                   as_dict=True)
+                if addr_details:
+                    company_address_str = ", ".join(filter(None, [
+                        addr_details.get("address_line1"), 
+                        addr_details.get("address_line2"), 
+                        addr_details.get("city"), 
+                        addr_details.get("state"), 
+                        addr_details.get("pincode")
+                    ]))
+            company_phone_str = company_doc.phone_no or ""
+        except frappe.DoesNotExistError:
+            frappe.log_error(f"Company {company_name} not found for default receipt template placeholders.", "POS Receipt Template")
+            # resolved_company_name remains "Your Company"
+
+    header_text_template = """
+<div style="text-align:center;">
+    <h2>{company_name}</h2>
+    <p>{company_address}</p>
+    <p>Phone: {company_phone}</p>
+</div>
+"""
+    
+    return {
+        "name": "_system_default_",
+        "template_name": "System Default Receipt",
+        "company": company_name, 
+        "pos_profile": None,
+        "is_default": 0,
+        "receipt_width_mm": 78,
+        "header_logo": None,
+        "header_text": header_text_template.format(
+            company_name=resolved_company_name,
+            company_address=company_address_str,
+            company_phone=company_phone_str
+        ),
+        "item_line_format": "{qty} x {item_name} - {rate} - {amount}",
+        "subtotal_label": "Subtotal",
+        "tax_label_format": "{description} ({tax_rate}%): {amount}",
+        "grand_total_label": "GRAND TOTAL",
+        "payment_mode_label_format": "{mode_of_payment}: {amount}",
+        "change_due_label": "Change:",
+        "footer_text": "<p style='text-align:center;'>Thank you for your business!</p>",
+        "font_size_css": "10pt",
+        "line_spacing_css": "1.2",
+        "disable_erpnext_branding": 1
+    }
+
+
 # --- Main Data Endpoints ---
 @frappe.whitelist()
 def get_initial_pos_data(pos_profile_name, company):
@@ -109,7 +225,7 @@ def get_initial_pos_data(pos_profile_name, company):
     items_data, item_prices_data = _get_items_and_prices_for_pos(pos_profile, company)
     warehouses_data = _get_warehouses_for_pos(pos_profile, company)
     stock_levels_data = _get_stock_levels_snapshot(items_data, warehouses_data)
-    customers_data = _get_customers_for_pos(pos_profile, company) # Modified to prioritize defaults
+    customers_data = _get_customers_for_pos(pos_profile, company) 
 
     payment_modes_data = []
     if pos_profile.payments:
@@ -122,22 +238,31 @@ def get_initial_pos_data(pos_profile_name, company):
 
 
     tax_templates_data = frappe.get_all("Sales Taxes and Charges Template",
-                                        filters={"company": company, "disabled":0}, # Ensure active templates
+                                        filters={"company": company, "disabled":0}, 
                                         fields=["name", "is_default", "title", "company", "account_head", "amount", "type"], ignore_permissions=True) 
 
     company_doc = frappe.get_doc("Company", company)
+    company_address_details = None
+    if company_doc.company_address:
+        try:
+            company_address_details = frappe.get_doc("Address", company_doc.company_address).as_dict()
+        except frappe.DoesNotExistError:
+            frappe.log_warning(f"Company Address {company_doc.company_address} not found for Company {company}", "POS Initial Data")
+
     company_settings = {
         "name": company_doc.name,
         "default_currency": company_doc.default_currency,
         "country": company_doc.country,
-        "company_address": frappe.db.get_value("Address", company_doc.company_address, "*") if company_doc.company_address else None,
+        "company_address": company_address_details, # This will be a dict or None
         "default_cash_account": company_doc.default_cash_account,
         "default_receivable_account": company_doc.default_receivable_account,
         "default_income_account": company_doc.default_income_account,
         "default_expense_account": company_doc.default_expense_account,
         "default_cost_center": company_doc.cost_center,
         "credit_controller": company_doc.credit_controller,
+        "company_phone": company_doc.phone_no, 
     }
+    
     accounts_settings = frappe.get_cached_doc("Accounts Settings", {"company": company})
     company_settings["use_sales_invoice_in_pos"] = accounts_settings.use_sales_invoice_in_pos
     company_settings["allow_discount_accounting"] = accounts_settings.allow_discount_accounting
@@ -147,6 +272,28 @@ def get_initial_pos_data(pos_profile_name, company):
     company_settings["auto_set_batch_nos"] = stock_settings.auto_set_batch_nos
     company_settings["auto_set_serial_nos"] = stock_settings.auto_set_serial_nos
     company_settings["allow_negative_stock"] = stock_settings.allow_negative_stock
+
+    # Fetch receipt template data
+    receipt_template_data = get_receipt_template_details(pos_profile_name, company)
+    
+    # If system default receipt template is used, and company_address was not fully resolved for it,
+    # try to populate its placeholders using company_settings which now has address as dict.
+    # This check ensures we only format if it's the actual default template from _get_system_default_receipt_template
+    if receipt_template_data.get("name") == "_system_default_":
+        header_text = receipt_template_data.get("header_text", "") # Get the template string
+        company_address_str = ""
+        if company_settings.get("company_address"): 
+            addr = company_settings["company_address"] # This is now a dict
+            company_address_str = ", ".join(filter(None, [
+                addr.get("address_line1"), addr.get("address_line2"), addr.get("city"), 
+                addr.get("state"), addr.get("pincode")
+            ]))
+        
+        receipt_template_data["header_text"] = header_text.format(
+            company_name=company_doc.company_name or "Your Company",
+            company_address=company_address_str,
+            company_phone=company_doc.phone_no or ""
+        )
 
     return {
         "pos_profile_settings": pos_profile_data,
@@ -158,6 +305,7 @@ def get_initial_pos_data(pos_profile_name, company):
         "payment_modes": payment_modes_data,
         "tax_templates": tax_templates_data,
         "company_settings": company_settings,
+        "receipt_template_data": receipt_template_data 
     }
 
 @frappe.whitelist()
@@ -402,6 +550,8 @@ def get_updated_master_data(pos_profile_name, company, last_sync_timestamp):
         "Customer Group": ["name", "parent_customer_group", "is_group", "disabled", "default_price_list"],
         "Sales Taxes and Charges Template": ["name", "title", "is_default", "company", "disabled"],
         "Payment Mode": ["name", "mode_of_payment", "type", "disabled"],
+        # Add POS Receipt Template if it needs to be synced this way
+        # "POS Receipt Template": ["name", "template_name", "company", "pos_profile", "is_default", ...] 
     }
 
     for doctype, fields_to_fetch in doctypes_to_sync.items():
@@ -439,7 +589,7 @@ def get_updated_master_data(pos_profile_name, company, last_sync_timestamp):
         final_fields_to_fetch = ["name"] + [f for f in fields_to_fetch if f != "name"]
         docs = frappe.get_list(doctype, filters=filters_dict, fields=final_fields_to_fetch, ignore_permissions=True)
         
-        if doctype in ["POS Profile", "Sales Taxes and Charges Template", "Payment Mode"] and docs:
+        if doctype in ["POS Profile", "Sales Taxes and Charges Template", "Payment Mode"] and docs: # Consider if POS Receipt Template needs full doc sync
             full_docs_list = []
             for d in docs:
                 try:
@@ -594,3 +744,5 @@ def _get_customers_for_pos(pos_profile, company):
                 frappe.log_message("POS Custom API", f"A critical default customer '{cust_name}' was not found in the database.", level=frappe.LOG_WARNING)
             
     return customers
+
+[end of erpnext/pos_custom_api.py]

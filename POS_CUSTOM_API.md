@@ -267,6 +267,60 @@ This document details the custom API endpoints created in `erpnext.pos_custom_ap
     *   For certain DocTypes (like `POS Profile`, `Sales Taxes and Charges Template`, `Payment Mode`), it fetches the full document dictionary if updated, to include child table data.
     *   Fetches deleted document entries from `tabDeleted Document` based on their creation timestamp and if the `deleted_doctype` is in the tracked list.
 
+## 5. `get_receipt_template_details`
+
+*   **Endpoint:** `/api/method/erpnext.pos_custom_api.get_receipt_template_details`
+*   **Purpose:** Fetches the relevant POS receipt template for a given POS Profile and Company.
+*   **Method:** `POST`
+*   **Parameters:**
+    *   `pos_profile_name` (String, Optional): The name of the POS Profile. If provided, the system will first look for a template specifically linked to this profile.
+    *   `company` (String, Optional): The name of the Company. This is used to find a company-wide default template if no profile-specific template is found or if `pos_profile_name` is not provided. The API will attempt to derive the company from the POS Profile if only `pos_profile_name` is given. If company context cannot be established, an error is thrown.
+*   **Request Body Structure Examples:**
+    ```json
+    // To get template for a specific POS Profile (company can be derived)
+    {
+        "pos_profile_name": "My Shop POS" 
+    }
+    ```
+    ```json
+    // To get a company's default template (if no POS Profile specified)
+    {
+        "company": "My Company LLC"
+    }
+    ```
+*   **Response Payload Structure (Successful):**
+    A JSON object representing a single `POS Receipt Template` document (or a system default).
+    ```json
+    {
+        "message": {
+            "name": "My Cafe Receipt", // Name of the POS Receipt Template document or "_system_default_"
+            "template_name": "My Cafe Receipt", // Or "System Default Receipt"
+            "company": "My Company LLC",
+            "pos_profile": "My Shop POS", // Or null
+            "is_default": 0, // 1 if it's a company default not tied to a specific profile
+            "receipt_width_mm": 78,
+            "header_logo": "/files/my_logo.png", // Full URL if absolute, or relative path
+            "header_text": "<div style='text-align:center;'><h1>My Cafe</h1><p>123 Main St</p></div>",
+            "item_line_format": "{qty} x {item_name} @ {rate} = {amount}",
+            "subtotal_label": "Subtotal:",
+            "tax_label_format": "{description} ({tax_rate}%): {amount}",
+            "grand_total_label": "TOTAL:",
+            "payment_mode_label_format": "{mode_of_payment}: {amount}",
+            "change_due_label": "Change Due:",
+            "footer_text": "<p style='text-align:center;'>Thanks for your visit!</p>",
+            "font_size_css": "10pt",
+            "line_spacing_css": "1.2",
+            "disable_erpnext_branding": 1
+            // ... any other fields from the POS Receipt Template Doctype
+        }
+    }
+    ```
+*   **Fallback Logic & System Default:**
+    1.  **Profile-Specific:** The system first tries to find a `POS Receipt Template` directly linked to the `pos_profile_name` (and matching `company`, `disabled=0`).
+    2.  **Company Default:** If no profile-specific template is found, it looks for a template marked as `is_default=1` for the given `company` (`disabled=0`).
+    3.  **System Default:** If neither is found, or if the `POS Receipt Template` Doctype does not exist, a hardcoded system default template is returned. This system default will have its `name` field set to `_system_default_`. Its `header_text` includes placeholders like `{company_name}`, `{company_address}`, and `{company_phone}` which are populated by the API using the Company's details.
+*   **Note:** If the `POS Receipt Template` Doctype itself does not exist in the system, the API will log a warning and return the system default.
+
 ## Appendix
 
 ### A.1. `POS Session Log` Doctype
@@ -280,6 +334,24 @@ This document details the custom API endpoints created in `erpnext.pos_custom_ap
     *   `ip_address` (Data, Optional): The IP address from which the user initiated the session.
     *   `notes` (Small Text, Optional): Any additional notes related to the session event (e.g., successful login, failed attempt details if logged).
 *   **Permissions:** System Manager should have full access. Other roles may be granted read or create access as needed. Log entries are typically created by the system/API on behalf of the user.
+
+### A.2. `POS Receipt Template` Doctype
+*   **Purpose:** Allows users to define custom layouts and content for POS receipts. Templates can be specific to a POS Profile or set as a company-wide default.
+*   **Key Fields (Illustrative - see full definition in development tasks):**
+    *   `template_name` (Data, Mandatory, Unique): User-friendly name for the template.
+    *   `company` (Link to Company, Mandatory): Company this template belongs to.
+    *   `pos_profile` (Link to POS Profile, Optional, Unique): If set, this template is exclusively for this POS Profile.
+    *   `is_default` (Check): If checked, this template is the default for the company (used if no profile-specific template is found).
+    *   `header_logo` (Attach Image): Logo for the receipt header.
+    *   `header_text` (Text Editor): HTML/Text for the receipt header (e.g., shop name, address).
+    *   `item_line_format` (Small Text): Format string for item lines (e.g., `"{qty} x {item_name} - {rate} - {amount}"`).
+    *   `tax_label_format` (Data): Format for tax lines (e.g., `"{description} ({tax_rate}%): {amount}"`).
+    *   `footer_text` (Text Editor): HTML/Text for the receipt footer (e.g., thank you message, terms).
+    *   `receipt_width_mm` (Int): Width of the receipt paper in millimeters (e.g., 78).
+    *   `font_size_css` (Data): CSS font size (e.g., "10pt", "12px").
+    *   `line_spacing_css` (Data): CSS line-height value (e.g., "1.2").
+    *   `disable_erpnext_branding` (Check): Option to hide "Powered by ERPNext".
+*   **Placeholders:** The text fields (`header_text`, `item_line_format`, `footer_text`, etc.) can use placeholders that the client-side application will replace with actual transaction data (e.g., `{company_name}`, `{item_name}`, `{grand_total}`). The system default template uses `{company_name}`, `{company_address}`, and `{company_phone}` in its `header_text` which are populated by the API.
 
 ---
 
