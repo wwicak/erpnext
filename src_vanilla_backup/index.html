@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline POS</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="loginScreen" class="container login-container">
+        <header>
+            <h1>POS Terminal Login</h1>
+        </header>
+        <main>
+            <div class="login-form">
+                <div class="form-group">
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPosProfile">POS Profile:</label>
+                    <input type="text" id="loginPosProfile" placeholder="Enter POS Profile Name" required>
+                </div>
+                <button id="loginBtn">Login</button>
+                <p id="loginError" class="error-message"></p>
+            </div>
+        </main>
+    </div>
+
+    <div id="mainPOSInterface" class="container pos-container" style="display: none;">
+        <header>
+            <h1>Offline POS Terminal</h1>
+            <div class="user-info">
+                Logged in as: <span id="loggedInUserName">N/A</span>
+                | POS Profile: <span id="activePOSProfile">N/A</span>
+                <button id="logoutBtn">Logout</button>
+            </div>
+            <div class="sync-controls">
+                <input type="text" id="erpnextUrl" placeholder="ERPNext URL (e.g., http://localhost:8000)">
+                <input type="text" id="posProfileName" placeholder="POS Profile Name (for sync config)">
+                <input type="text" id="companyName" placeholder="Company Name (for sync config)">
+                <button id="configureSyncBtn">Save Sync Config</button>
+                <button id="syncDataBtn">Sync Initial Data</button>
+                <p id="syncStatus"></p>
+            </div>
+        </header>
+
+        <main class="pos-layout">
+            <section class="item-selection-panel">
+                <h2>Items</h2>
+                <input type="text" id="itemSearch" placeholder="Search items (or scan barcode)...">
+                 <button id="priceCheckBtn">Price Check</button>
+                <div id="itemList" class="item-list">
+                    <!-- Items will be populated here by ui.js -->
+                </div>
+            </section>
+
+            <section class="transaction-panel">
+                <div class="cart-actions">
+                    <button id="holdCartBtn">Hold Cart</button>
+                    <button id="viewResumeCartBtn">View/Resume Carts</button>
+                </div>
+                <h2>Cart</h2>
+                <div class="customer-selection" style="display: none;"> <!-- Hidden as per new requirement -->
+                    <label for="customerSearch">Customer:</label>
+                    <input type="text" id="customerSearch" placeholder="Search customers...">
+                    <div id="customerList" class="customer-list-dropdown"></div>
+                    <p>Selected Customer: <span id="selectedCustomerName">Walk-in</span></p>
+                    <input type="hidden" id="selectedCustomer" value="Walk-in">
+                </div>
+                 <p>Customer: <span id="activeCustomerName">Walk-in Customer</span></p>
+
+
+                <div id="cartItems" class="cart-items-list">
+                    <!-- Cart items will be populated here -->
+                </div>
+
+                <div class="totals-section">
+                    <p>Subtotal: <span id="cartSubtotal">0.00</span></p>
+                    <p>Taxes (Dummy): <span id="cartTaxes">0.00</span></p>
+                    <p><strong>Grand Total: <span id="cartGrandTotal">0.00</span></strong></p>
+                </div>
+
+                <div class="payment-section">
+                    <h3>Payment</h3>
+                    <select id="paymentMode">
+                        <!-- Payment modes will be populated here -->
+                    </select>
+                    <input type="number" id="paymentAmount" placeholder="Amount" step="0.01">
+                    <button id="addPaymentBtn">Add Payment</button>
+                    <div id="paymentsList">
+                        <!-- Applied payments will be shown here -->
+                    </div>
+                    <p>Total Paid: <span id="totalPaidAmount">0.00</span></p>
+                    <p>Change/Balance: <span id="changeAmount">0.00</span></p>
+                </div>
+
+                <button id="completeSaleBtn" class="complete-sale-btn">Complete Sale</button>
+                <button id="clearCartBtn" class="clear-cart-btn">Clear Cart</button>
+            </section>
+        </main>
+    </div>
+
+    <!-- Price Check Modal -->
+    <div id="priceCheckModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-button" id="closePriceCheckModal">&times;</span>
+            <h2>Price Check</h2>
+            <input type="text" id="priceCheckItemInput" placeholder="Scan barcode or enter item code/name">
+            <button id="priceCheckLookupBtn">Lookup</button>
+            <div id="priceCheckResult">
+                <!-- Price check results will be displayed here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Held Carts Modal -->
+     <div id="heldCartsModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-button" id="closeHeldCartsModal">&times;</span>
+            <h2>Held Carts</h2>
+            <div id="heldCartsList">
+                <!-- List of held carts -->
+            </div>
+        </div>
+    </div>
+
+
+    <script src="db.js"></script>
+    <script src="sync.js"></script>
+    <script src="cart.js"></script>
+    <script src="ui.js"></script>
+    <script src="pos_logic.js"></script>
+    <!-- barcode_handler.js could be separate or integrated into main.js -->
+    <script src="main.js"></script> 
+</body>
+</html>
