@@ -1,5 +1,6 @@
+import * as sqliteDB from '../sqlite_db.js';
+
 // --- Initial Data Synchronization ---
-// Assumes db.js (and Dexie instance 'db', replaceAllData, replaceAllItems) is loaded
 
 // Configuration
 let ERPNEXT_API_BASE_URL = ""; 
@@ -128,16 +129,16 @@ async function fetchInitialData(profileToSync, companyToSync) {
         
         console.log("Received data from server:", message);
 
-        await window.replaceAllData('pos_profiles', message.pos_profile_settings ? [message.pos_profile_settings] : []);
-        if (window.replaceAllItems) { await window.replaceAllItems(message.items || []); } 
-        else { await window.replaceAllData('items', message.items || []); }
-        await window.replaceAllData('item_prices', message.item_prices || []);
-        await window.replaceAllData('warehouses', message.warehouses || []);
-        await window.replaceAllData('stock_levels', message.stock_levels || []);
-        await window.replaceAllData('customers', message.customers || []);
-        await window.replaceAllData('payment_modes', message.payment_modes || []);
-        await window.replaceAllData('tax_templates', message.tax_templates || []);
-        await window.replaceAllData('company_settings', message.company_settings ? [message.company_settings] : []);
+        // Use sqliteDB.replaceAllData for all tables
+        await sqliteDB.replaceAllData('pos_profiles', message.pos_profile_settings ? [message.pos_profile_settings] : []);
+        await sqliteDB.replaceAllData('items', message.items || []); // sqliteDB.replaceAllData handles items correctly
+        await sqliteDB.replaceAllData('item_prices', message.item_prices || []);
+        await sqliteDB.replaceAllData('warehouses', message.warehouses || []);
+        await sqliteDB.replaceAllData('stock_levels', message.stock_levels || []);
+        await sqliteDB.replaceAllData('customers', message.customers || []);
+        await sqliteDB.replaceAllData('payment_modes', message.payment_modes || []);
+        await sqliteDB.replaceAllData('tax_templates', message.tax_templates || []);
+        await sqliteDB.replaceAllData('company_settings', message.company_settings ? [message.company_settings] : []);
 
         if (syncStatusElement) syncStatusElement.textContent = "Sync complete!";
         console.log("Initial data sync successful.");
@@ -186,11 +187,28 @@ async function syncOfflineTransactions(transactionsToSync) {
         
         // data.message should be the list of results from the backend
         console.log("Sync response:", data.message);
+        
+        // After this, the calling code would iterate through data.message (sync results)
+        // and update local transaction statuses using sqliteDB.updateTransactionStatus(tx.id, status, error_message)
+        // For example:
+        // if (data.message && Array.isArray(data.message)) {
+        //     for (const result of data.message) {
+        //         const localTx = transactionsToSync.find(t => t.offline_id === result.offline_id);
+        //         if (localTx) {
+        //             if (result.success) {
+        //                 await sqliteDB.updateTransactionStatus(localTx.id, 'synced');
+        //             } else {
+        //                 await sqliteDB.updateTransactionStatus(localTx.id, 'failed', result.error || 'Unknown sync error');
+        //             }
+        //         }
+        //     }
+        // }
         return { success: true, results: data.message };
 
     } catch (error) {
         console.error("Error syncing offline transactions:", error);
         alert(`Error syncing transactions: ${error.message}`);
+        // Potentially mark all sent transactions as 'failed' or 'pending_retry' here if the entire batch failed
         return { success: false, message: error.message, results: [] };
     }
 }

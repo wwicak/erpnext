@@ -1,3 +1,5 @@
+import * as sqliteDB from '../sqlite_db.js';
+
 // cart.js - Manages the state of the current shopping cart
 
 // Cart state (in-memory)
@@ -41,7 +43,7 @@ async function addItemToCart(itemData, quantity = 1) {
             }
         }
 
-        const stockLevelDoc = await getStockLevel(itemData.item_code, posProfile.warehouse); // from db.js
+        const stockLevelDoc = await sqliteDB.getStockLevel(itemData.item_code, posProfile.warehouse);
         const localActualQty = stockLevelDoc ? stockLevelDoc.actual_qty : 0;
 
         if (requestedQtyInStockUOM > localActualQty && !companySettings.allow_negative_stock) {
@@ -64,7 +66,7 @@ async function addItemToCart(itemData, quantity = 1) {
 
     if (targetPriceList) {
         try {
-            const priceDoc = await getItemPrice(itemData.item_code, targetPriceList); // from db.js
+            const priceDoc = await sqliteDB.getItemPrice(itemData.item_code, targetPriceList);
             if (priceDoc && priceDoc.price_list_rate) {
                 itemRate = priceDoc.price_list_rate;
                 priceSource = targetPriceList;
@@ -117,7 +119,7 @@ async function updateCartItemQuantity(itemCode, newQuantityStr) {
 
     // --- Local Stock Check for Update ---
     if (item.is_stock_item && posProfile && posProfile.warehouse) {
-        const itemFullData = await getItemByCode(item.item_code); // Fetch full item data for UOM info
+        const itemFullData = await sqliteDB.getItemByCode(item.item_code); // Fetch full item data for UOM info
         let requestedQtyInStockUOM = newQuantity;
         const salesUOM = item.uom || itemFullData.stock_uom;
         if (salesUOM !== itemFullData.stock_uom) {
@@ -129,7 +131,7 @@ async function updateCartItemQuantity(itemCode, newQuantityStr) {
             }
         }
 
-        const stockLevelDoc = await getStockLevel(item.item_code, posProfile.warehouse);
+        const stockLevelDoc = await sqliteDB.getStockLevel(item.item_code, posProfile.warehouse);
         const localActualQty = stockLevelDoc ? stockLevelDoc.actual_qty : 0;
 
         if (requestedQtyInStockUOM > localActualQty && !companySettings.allow_negative_stock) {
@@ -155,11 +157,11 @@ function removeItemFromCart(itemCode) {
 // Function to recalculate all cart item prices (e.g., after customer change)
 async function recalculateCartPrices() {
     for (let item of currentCartItems) {
-        const itemFullData = await getItemByCode(item.item_code); // Get full item data for rate fallback
+        const itemFullData = await sqliteDB.getItemByCode(item.item_code); // Get full item data for rate fallback
         let itemRate = itemFullData.standard_rate || 0;
-        const targetPriceList = currentCustomer?.default_price_list || window.currentPOSProfile?.selling_price_list;
+        const targetPriceList = currentCustomer?.default_price_list || window.posLogic.getCurrentPOSProfile()?.selling_price_list;
         if (targetPriceList) {
-            const priceDoc = await getItemPrice(item.item_code, targetPriceList);
+            const priceDoc = await sqliteDB.getItemPrice(item.item_code, targetPriceList);
             if (priceDoc && priceDoc.price_list_rate) {
                 itemRate = priceDoc.price_list_rate;
             }
@@ -195,6 +197,8 @@ function clearCart() {
 }
 
 // Expose cart functions globally or via a namespace
+// Ensure window.posLogic.getCurrentPOSProfile() is available if currentPOSProfile was directly accessed before.
+// It seems window.posLogic.getCurrentPOSProfile() is the correct way as per pos_logic.js
 window.cart = {
     setCartCustomer,
     addItemToCart,

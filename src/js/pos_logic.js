@@ -1,3 +1,5 @@
+import * as sqliteDB from '../sqlite_db.js';
+
 // pos_logic.js - Handles core Point of Sale operations, payments, and transaction finalization
 
 // --- State ---
@@ -36,7 +38,7 @@ async function initializePOSLogic(loggedInUser, loggedInPOSProfile) {
 
     try {
         // Fetch the specific POS Profile document used at login
-        const profileDoc = await db.pos_profiles.get(currentLoginPOSProfileName);
+        const profileDoc = await sqliteDB.getPOSProfile(currentLoginPOSProfileName);
         if (profileDoc) {
             currentPOSProfile = profileDoc;
             console.log("Active POS Profile data loaded:", currentPOSProfile);
@@ -47,7 +49,7 @@ async function initializePOSLogic(loggedInUser, loggedInPOSProfile) {
             const customerToSet = profileDefaultCustomer || globalWalkIn || "Walk-in";
             
             if (customerToSet !== "Walk-in") {
-                const custDetails = await db.customers.get(customerToSet);
+                const custDetails = await sqliteDB.getCustomerByName(customerToSet);
                 if (custDetails) {
                     setCurrentCustomer(custDetails);
                     if (document.getElementById('activeCustomerName')) document.getElementById('activeCustomerName').textContent = `${custDetails.customer_name} (${custDetails.name})`;
@@ -72,16 +74,18 @@ async function initializePOSLogic(loggedInUser, loggedInPOSProfile) {
     }
     
     try {
-        const companies = await db.company_settings.toArray(); // Should be only one
-        if (companies && companies.length > 0) {
-            currentCompanySettings = companies[0];
+        // sqliteDB.getCompanySettings() is expected to return a single object or null
+        // Assuming 'default_settings' is the key if multiple settings rows could exist,
+        // or that it fetches the specific one needed.
+        // If it always returns one company's settings, no parameter might be needed.
+        const companySetting = await sqliteDB.getCompanySettings(); // Adjust if a key like "default_settings" is needed
+        if (companySetting) {
+            currentCompanySettings = companySetting;
             console.log("Active Company Settings:", currentCompanySettings);
             currentCompanySettings.allow_negative_stock = !!parseInt(currentCompanySettings.allow_negative_stock || 0);
-            // Default walk-in customer ID from company settings
             currentCompanySettings.pos_walk_in_customer = currentCompanySettings.pos_walk_in_customer || "Walk-in";
         } else {
             console.warn("No Company Settings found in local DB. Using defaults.");
-            // Defaults already set: currentCompanySettings = { allow_negative_stock: 0, pos_walk_in_customer: "Walk-in" };
         }
     } catch (e) {
          console.error("Error initializing Company Settings:", e);
@@ -192,7 +196,7 @@ async function completeSale() {
 
     // Prepare items for transaction
     const transactionItems = await Promise.all(cartItems.map(async item => {
-        const itemFullData = await getItemByCode(item.item_code); // Fetch full item for defaults
+        const itemFullData = await sqliteDB.getItemByCode(item.item_code); // Fetch full item for defaults
         return {
             item_code: item.item_code,
             item_name: item.item_name, 
@@ -245,7 +249,7 @@ async function completeSale() {
         for (const cart_item of cartItems) {
             if (cart_item.is_stock_item) {
                 const item_warehouse = cart_item.warehouse || currentPOSProfile.warehouse;
-                const stock_level_doc = await getStockLevel(cart_item.item_code, item_warehouse);
+                const stock_level_doc = await sqliteDB.getStockLevel(cart_item.item_code, item_warehouse);
                 const local_actual_qty = stock_level_doc ? stock_level_doc.actual_qty : 0;
                 
                 let requested_qty_in_stock_uom = cart_item.qty;
@@ -263,8 +267,8 @@ async function completeSale() {
     }
 
     try {
-        const savedTxId = await saveOfflineTransaction(transactionData); 
-        console.log("Sale completed offline. Transaction ID (Dexie):", savedTxId, "Offline Ref:", offlineTxId);
+        const savedTxId = await sqliteDB.saveOfflineTransaction(transactionData); 
+        console.log("Sale completed offline. Transaction ID (SQLite lastInsertId):", savedTxId, "Offline Ref:", offlineTxId);
         alert(`Sale completed! Offline ID: ${offlineTxId}. This transaction is pending sync.${transactionData.local_stock_issue ? ' (Note: Potential local stock issue was detected)' : ''}`);
 
         window.cart.clearCart();
@@ -276,7 +280,7 @@ async function completeSale() {
         const customerToSetAfterSale = profileDefaultId || globalWalkInId || "Walk-in";
 
         if (customerToSetAfterSale !== "Walk-in") {
-            const custDetails = await db.customers.get(customerToSetAfterSale);
+            const custDetails = await sqliteDB.getCustomerByName(customerToSetAfterSale);
             if (custDetails) window.ui.selectCustomer(custDetails); // This will also update activeCustomerName
             else window.ui.clearSelectedCustomer(); // Fallback
         } else {
@@ -340,7 +344,7 @@ async function holdCurrentCart() {
         // Ask for an optional name for the held cart
         const holdName = prompt("Optional: Enter a name for this held cart (e.g., customer name, order number):");
 
-        await saveHeldCart(cartDataToHold, holdName || null); // from db.js
+        await sqliteDB.saveHeldCart(cartDataToHold, holdName || null);
         window.cart.clearCart();
         clearPayments(); // Also clear any applied payments from UI
         // Reset customer to default after holding
@@ -351,7 +355,7 @@ async function holdCurrentCart() {
         const customerToSetAfterHold = profileDefaultId || globalWalkInId || "Walk-in";
 
         if (customerToSetAfterHold !== "Walk-in") {
-            const custDetails = await db.customers.get(customerToSetAfterHold);
+            const custDetails = await sqliteDB.getCustomerByName(customerToSetAfterHold);
             if (custDetails) {
                 setCurrentCustomer(custDetails); 
                 window.ui.displayActiveCustomerName(custDetails); 
@@ -385,7 +389,7 @@ async function resumeCart(heldCartId) {
     }
 
     try {
-        const heldCart = await getHeldCart(heldCartId); // from db.js
+        const heldCart = await sqliteDB.getHeldCart(heldCartId);
         if (!heldCart) {
             alert("Held cart not found.");
             return false;
@@ -408,7 +412,7 @@ async function resumeCart(heldCartId) {
         }
 
 
-        await deleteHeldCart(heldCartId); // from db.js
+        await sqliteDB.deleteHeldCart(heldCartId);
         alert(`Cart "${heldCart.name}" resumed successfully.`);
         window.ui.displayCart(); // Refresh cart display
         window.ui.showHeldCartsModal(false); // Close the modal
@@ -427,14 +431,14 @@ async function fetchPriceCheckInfo(lookupValue) {
         return { success: false, message: "Please enter an item code, name, or scan a barcode." };
     }
     try {
-        let item = await getItemByBarcode(lookupValue.trim()); // from db.js
+        let item = await sqliteDB.getItemByBarcode(lookupValue.trim());
         if (!item) {
             // Try by item code
-            item = await getItemByCode(lookupValue.trim()); // from db.js
+            item = await sqliteDB.getItemByCode(lookupValue.trim());
         }
         if (!item) {
             // Try by item name (might return multiple, take first for simplicity in price check)
-            const itemsByName = await searchItems(lookupValue.trim()); // from db.js
+            const itemsByName = await sqliteDB.searchItems(lookupValue.trim());
             if (itemsByName && itemsByName.length > 0) {
                 item = itemsByName[0];
                  if (itemsByName.length > 1) {
@@ -455,7 +459,7 @@ async function fetchPriceCheckInfo(lookupValue) {
         const targetPriceList = customerForPriceCheck?.default_price_list || posProfileForPriceCheck?.selling_price_list;
 
         if (targetPriceList) {
-            priceInfo = await getItemPrice(item.item_code, targetPriceList); // from db.js
+            priceInfo = await sqliteDB.getItemPrice(item.item_code, targetPriceList);
         }
         
         // If no specific price list rate, item.standard_rate (from item data itself) could be a fallback if populated
@@ -478,7 +482,7 @@ async function handleBarcodeScan(barcode) {
     }
     console.log("Barcode scanned:", barcode);
     try {
-        const item = await getItemByBarcode(barcode); // from db.js
+        const item = await sqliteDB.getItemByBarcode(barcode);
         if (item) {
             console.log("Item found by barcode:", item.item_code, item.item_name);
             // Add to cart or increment quantity
