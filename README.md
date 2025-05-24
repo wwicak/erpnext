@@ -63,6 +63,111 @@ This is an offline-first Point of Sale (POS) application designed to integrate w
 
 5.  Open your browser and navigate to the URL provided by Vite (typically `http://localhost:5173` or similar).
 
+## Offline Development (Without ERPNext Connection)
+
+These instructions are for developers who want to work on the POS frontend UI/UX or features that don't immediately require a live ERPNext backend. This setup allows you to run and test the POS application in a disconnected state.
+
+**Important Considerations:**
+
+*   **Mock Data:** In this mode, the POS will not connect to ERPNext for initial data (items, prices, customers) or to sync sales. You will be relying on locally available data or mock data.
+*   **Authentication:**
+    *   **Admin Login:** The Admin Panel uses local credentials (`admin`/`passwordChange123` by default, then your changed password), so it will continue to work.
+    *   **Clerk Login:** Since clerk authentication normally happens against ERPNext, you'll need a way to bypass this.
+*   **Limitations:** This mode is for frontend development and testing. Full integration testing (like actual data synchronization to ERPNext) will still require a live ERPNext instance.
+
+**Steps to Develop Offline:**
+
+1.  **Standard Project Setup:**
+    *   Follow the main "Project Setup and Installation (Development)" steps (cloning, installing dependencies) if you haven't already.
+
+2.  **Bypassing ERPNext API Calls (Conceptual):**
+    *   To truly work offline, the application needs to avoid making HTTP requests to an ERPNext server. This typically involves:
+        *   **Configuration Flag:** Check if there's a development mode flag in a configuration file (e.g., `.env`, `vite.config.js`, or within the application's settings) that disables ERPNext integration. If not, this might be a good feature to add.
+        *   **Service Mocking:** Identify the services or modules responsible for ERPNext API communication (e.g., functions in `src/services/api.js` or similar). For local development, you might:
+            *   Temporarily modify these functions to return mock/sample data instead of making network requests.
+            *   Example: If a function `fetchItemsFromERPNext()` exists, you could modify it to return a predefined list of item objects.
+            ```javascript
+            // Example of modifying a service function in src/services/api.js (conceptual)
+            export async function fetchItems() {
+              // Original code might fetch from ERPNext
+              // For offline dev, return mock data:
+              console.warn("DEVELOPMENT MODE: Returning mock items. ERPNext API call bypassed.");
+              return Promise.resolve([
+                { id: 'item1', name: 'Mock Item 1', price: 10.99, barcode: '1234567890123' },
+                { id: 'item2', name: 'Mock Item 2', price: 5.49, barcode: '9876543210987' },
+                // Add more sample items as needed
+              ]);
+            }
+            ```
+        *   **Conditional Logic:** Wrap API calls in conditional logic that checks if the application is in "offline development mode."
+        *   **Consider UI States:** When you bypass API calls, ensure your mock data or modified logic also helps test different UI states. When mocking, also consider how the UI behaves during API calls (e.g., loading spinners, disabled buttons, error messages). Your mocks should allow the UI to transition through these states correctly:
+            *   **Loading states:** How does the UI look while data *would have been* fetching?
+            *   **Error states:** Can you simulate an error response to see how the UI displays it?
+            *   **Empty states:** What if the API returns no data? Does the UI present a clear message?
+
+3.  **Handling Initial Data (Items, Customers, etc.):**
+    *   The POS relies on `wa-sqlite` for its local database.
+    *   **Option A (If pre-filled DB is available):** If the project documentation points to a sample `*.sqlite` file with test data, find instructions on how to place it so `wa-sqlite` picks it up. This would be the quickest way to populate initial data. If not available, proceed with other options.
+    *   **Option B (Manual Mocking - as above):** If you're mocking API calls (Step 2), ensure your mock data for items, customers, and POS profiles is sufficient for testing the UI.
+    *   **Option C (Local Seeding - Advanced):** If the application has a mechanism to seed the local `wa-sqlite` database directly (e.g., via a development script or admin panel function not requiring ERPNext), that would be ideal.
+
+4.  **Clerk Login without ERPNext:**
+    *   **Identify Login Logic:** Look into the clerk login components/functions (likely in `src/stores/authStore.js`, `src/views/auth/Login.vue`, `src/components/LoginScreen.vue` or similar files related to authentication).
+    *   **Bypass Authentication:**
+        *   You might need to modify the login function to accept any username/password or specific dummy credentials when in offline development mode.
+        *   Alternatively, after a failed login attempt (which is expected without ERPNext), you could manually set the application's state to "logged in" using browser developer tools (if you know the state management structure, e.g., Pinia).
+        ```javascript
+        // Example of modifying authStore.js (conceptual)
+        actions: {
+          async loginClerk(credentials) {
+            if (import.meta.env.VITE_OFFLINE_DEV_MODE === 'true') {
+              console.warn("DEVELOPMENT MODE: Bypassing clerk authentication.");
+              this.user = { username: credentials.username, /* other mock details */ };
+              this.isAuthenticated = true;
+              this.posProfile = credentials.posProfile || 'MockProfile'; // Use provided or default
+              // Potentially load mock POS Profile data here
+              return true;
+            } else {
+              // Original ERPNext authentication logic
+              // ...
+            }
+          }
+        }
+        ```
+    *   **POS Profile:** Ensure a mock POS Profile is also loaded or simulated, as it's crucial for POS operation.
+
+5.  **Simulating Sale Synchronization:**
+    *   The "Sync Offline Sales" feature will naturally not work without ERPNext.
+    *   For development, you can usually ignore this, as sales will still be saved to the local `wa-sqlite` database.
+    *   If you need to test UI changes related to sync status, you might need to modify the sync function to simulate success or failure locally.
+
+6.  **Running the Application:**
+    *   Once your modifications for offline mode are in place, run the development server as usual:
+        ```bash
+        npm run dev
+        # or
+        yarn dev
+        ```
+
+**Example Environment Variable (Recommended for robust setup):**
+
+Consider using an environment variable to control offline mode. This approach is cleaner than directly editing code files for development mode, as it reduces the risk of accidentally committing development-only settings.
+
+1.  Create a file named `.env.local` in the project root (if it doesn't exist). This file is usually gitignored.
+2.  Add a variable:
+    ```
+    VITE_OFFLINE_DEV_MODE=true
+    ```
+3.  In your code (e.g., `api.js`, `authStore.js`), you can access this like:
+    `if (import.meta.env.VITE_OFFLINE_DEV_MODE === 'true') { ... }`
+
+**Restoring Online Functionality:**
+
+*   Remember to revert any direct code modifications made for offline development (like changes to service files or stores) before committing code intended for production or integrated testing.
+*   If using an environment variable, simply set `VITE_OFFLINE_DEV_MODE=false` or remove/comment out the variable in your `.env.local` file.
+
+By following these guidelines, junior developers should be able to contribute to the POS system's frontend development even without direct access to an ERPNext instance during their local development process.
+
 ## Configuration
 
 ### 1. Connecting POS to ERPNext
