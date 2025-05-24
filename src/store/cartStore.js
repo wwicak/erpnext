@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia';
 import { useAuthStore } from './authStore';
 import { useDataStore } from './dataStore';
-import { useSyncStore } from './syncStore'; // Import syncStore
-import { saveOfflineTransaction } from '../utils/localDB'; // Corrected path
+import { useSyncStore } from './syncStore';
+import { saveOfflineTransaction, logClerkActivity } from '../utils/localDB'; // Import activity logger
 
 export const useCartStore = defineStore('cart', {
   state: () => ({
@@ -72,14 +72,30 @@ export const useCartStore = defineStore('cart', {
     removeItemFromCart(itemCode) {
       this.cartItems = this.cartItems.filter(item => item.item_code !== itemCode);
     },
-    clearCart() {
+    async clearCart() { // Made async for logging
+      const authStore = useAuthStore();
+      const itemsBeingCleared = [...this.cartItems]; // Copy items before clearing
+
+      if (itemsBeingCleared.length > 0 && authStore.isLoggedIn && authStore.currentUser) {
+        try {
+          await logClerkActivity(
+            authStore.currentUser.user_id, 
+            authStore.currentUser.full_name, 
+            'CART_CLEARED', 
+            { itemCount: itemsBeingCleared.length }
+          );
+        } catch (logError) {
+          console.error("Failed to log cart cleared activity:", logError);
+        }
+      }
+
       this.cartItems = [];
       this.clearPayments();
-      this.resetSelectedCustomerToDefault(); // Ensure customer is reset
-      console.log('Cart cleared and customer reset to default.');
+      this.resetSelectedCustomerToDefault(); 
+      // console.log('Cart cleared and customer reset to default.');
     },
     resetSelectedCustomerToDefault() {
-        const dataStore = useDataStore(); // Get instance inside action
+        const dataStore = useDataStore(); 
         let defaultCustomerName = 'Walk-in'; 
         if (dataStore.activePOSProfileDetails && dataStore.activePOSProfileDetails.default_customer) {
             defaultCustomerName = dataStore.activePOSProfileDetails.default_customer;
@@ -89,17 +105,16 @@ export const useCartStore = defineStore('cart', {
         
         const defaultCustomer = dataStore.customers.find(c => c.name === defaultCustomerName);
         if (defaultCustomer) {
-            this.selectedCustomer = JSON.parse(JSON.stringify(defaultCustomer)); // Deep copy
+            this.selectedCustomer = JSON.parse(JSON.stringify(defaultCustomer)); 
         } else {
             this.selectedCustomer = { name: 'Walk-in', customer_name: 'Walk-in Customer', default_price_list: null };
         }
     },
     setCartCustomer(customerData) {
       if (customerData && typeof customerData === 'object') {
-        this.selectedCustomer = JSON.parse(JSON.stringify(customerData)); // Deep copy
+        this.selectedCustomer = JSON.parse(JSON.stringify(customerData)); 
       } else {
         this.resetSelectedCustomerToDefault();
-        console.warn('Invalid customer data passed to setCartCustomer. Reset to default.');
       }
     },
     addPayment(paymentData) { 
@@ -109,8 +124,6 @@ export const useCartStore = defineStore('cart', {
           mode_of_payment: paymentData.mode_of_payment,
           amount: amount,
         });
-      } else {
-        console.warn('Invalid payment data:', paymentData);
       }
     },
     clearPayments() {
@@ -134,17 +147,18 @@ export const useCartStore = defineStore('cart', {
       } else {
           this.resetSelectedCustomerToDefault();
       }
-      console.log("Cart loaded from held state.");
+      // console.log("Cart loaded from held state.");
     },
     async completeSale() {
       this.isCompletingSale = true;
       const authStore = useAuthStore();
       const dataStore = useDataStore();
+      const syncStore = useSyncStore(); 
 
       try {
-        if (!authStore.isLoggedIn) {
+        if (!authStore.isLoggedIn || !authStore.currentUser) {
           alert('Error: User not logged in. Please login again.');
-          return; // Early return
+          return; 
         }
         if (!dataStore.activePOSProfileDetails.name || !dataStore.companySettings.name) {
           alert('Error: Critical POS profile or company settings are not loaded. Please try syncing configuration or re-login.');
@@ -193,11 +207,23 @@ export const useCartStore = defineStore('cart', {
         };
         
         await saveOfflineTransaction(transactionData);
+
+        // Log SALE_COMPLETED activity
+        try {
+          await logClerkActivity(
+            authStore.currentUser.user_id, 
+            authStore.currentUser.full_name, 
+            'SALE_COMPLETED', 
+            { offline_id: transactionData.offline_id, amount: transactionData.grand_total, customer: transactionData.customer }
+          );
+        } catch (logError) {
+          console.error("Failed to log sale completed activity:", logError);
+        }
+        
         alert(`Sale completed successfully! Offline ID: ${offlineTxId}\nChange to give: ${transactionData.change_amount.toFixed(2)}`);
         
-        this.clearCart(); // This also clears payments and resets customer by calling resetSelectedCustomerToDefault
-        // The resetSelectedCustomerToDefault is already called within clearCart.
-        // If it wasn't, we would call it here: this.resetSelectedCustomerToDefault();
+        await this.clearCart(); // Made clearCart async for logging, ensure to await it.
+        await syncStore.loadPendingTransactionsCount();
 
       } catch (error) {
         console.error('Failed to complete sale:', error);

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
-import * as localDB from '../utils/localDB';
-import * as api from '../services/api'; // api.submitPOSInvoice, api.getFrappeCsrfToken
+import * as localDB from '../utils/localDB'; // localDB.logApiSyncAttempt
+import * as api from '../services/api'; 
 import { useAuthStore } from './authStore';
 import { useSyncConfigStore } from './syncConfigStore';
 
@@ -46,28 +46,24 @@ export const useSyncStore = defineStore('sync', {
       
       let csrfToken = authStore.currentUser?.csrf_token;
 
-      // Attempt to fetch CSRF token if not already available or if it might be stale
-      // This is a simplified approach; a more robust solution would involve checking token expiry
-      // or handling 401/403 errors that specifically indicate CSRF failure.
       if (!csrfToken) {
         try {
-          console.log("Attempting to fetch CSRF token as it's not in authStore...");
+          console.log("Attempting to fetch CSRF token as it's not in authStore for sync...");
           const fetchedToken = await api.getFrappeCsrfToken(erpNextUrl);
-          if (fetchedToken && !fetchedToken.startsWith('dummy_')) { // Check if it's a real token
-            authStore.setCurrentUserCSRFToken(fetchedToken); // New action needed in authStore
+          if (fetchedToken && !fetchedToken.startsWith('dummy_')) { 
+            authStore.setCurrentUserCSRFToken(fetchedToken); 
             csrfToken = fetchedToken;
-            console.log("CSRF token fetched and stored in authStore.");
+            console.log("CSRF token fetched and stored in authStore for sync.");
           } else {
-            throw new Error("Failed to retrieve a valid CSRF token.");
+            throw new Error("Failed to retrieve a valid CSRF token for sync.");
           }
         } catch (tokenError) {
-          console.error("Failed to fetch CSRF token:", tokenError);
-          this.syncError = `Failed to fetch CSRF token: ${tokenError.message}. Cannot sync.`;
+          console.error("Failed to fetch CSRF token for sync:", tokenError);
+          this.syncError = `Failed to fetch CSRF token: ${tokenError.message}. Sync aborted.`;
           this.isSyncing = false;
           return;
         }
       }
-
 
       let pendingTransactions = [];
       try {
@@ -82,7 +78,7 @@ export const useSyncStore = defineStore('sync', {
         this.syncSuccessMessage = "No pending transactions to sync.";
         this.lastSyncTime = new Date().toISOString();
         this.isSyncing = false;
-        await this.loadPendingTransactionsCount(); // Should be 0
+        await this.loadPendingTransactionsCount(); 
         return;
       }
 
@@ -90,52 +86,73 @@ export const useSyncStore = defineStore('sync', {
       let failureCount = 0;
 
       for (const tx of pendingTransactions) {
+        // Log attempt - request_payload_json is the tx data itself before mapping for submitPOSInvoice
+        // The actual payload sent by submitPOSInvoice might be slightly different.
+        // For simplicity, logging the raw `tx` which includes items and payments.
+        // `api.submitPOSInvoice` itself creates the `salesInvoiceData` payload.
+        // To log the exact payload, `submitPOSInvoice` would need to return it or log it.
+        // For now, logging `tx` is a good approximation of what's being sent.
+        await localDB.logApiSyncAttempt({
+          offline_transaction_id: tx.offline_id,
+          status: 'ATTEMPTING',
+          request_payload_json: JSON.stringify(tx) // Log the raw transaction data being attempted
+        });
+
         try {
-          // The transaction (tx) object from localDB includes items and payments already parsed from JSON.
-          // api.submitPOSInvoice expects these to be arrays.
           const response = await api.submitPOSInvoice(erpNextUrl, tx, csrfToken);
-          // Assuming success if no error is thrown
+          
           await localDB.updateTransactionStatus(tx.offline_id, 'synced');
+          await localDB.logApiSyncAttempt({
+            offline_transaction_id: tx.offline_id,
+            erpnext_invoice_id: response.data?.name, // Assuming ERPNext returns { data: { name: 'INV-ID' } }
+            status: 'SUCCESS',
+            http_status_code: 200, // Assuming success implies 200 or similar
+            response_body_json: JSON.stringify(response)
+          });
           successCount++;
         } catch (error) {
           failureCount++;
           const errorMessage = error.message || 'Unknown error during submission.';
-          console.error(`Failed to sync transaction ${tx.offline_id}:`, error);
+          const httpStatusCode = error.statusCode || null;
+          const responseBody = error.requestBody ? JSON.stringify(error.requestBody) : (error.response ? JSON.stringify(error.response) : null);
+
+
           await localDB.updateTransactionStatus(tx.offline_id, 'failed', errorMessage);
+          await localDB.logApiSyncAttempt({
+            offline_transaction_id: tx.offline_id,
+            status: 'FAILED',
+            http_status_code: httpStatusCode,
+            error_message: errorMessage,
+            response_body_json: responseBody, // Log error response if available
+            request_payload_json: JSON.stringify(tx) // Log the request that failed
+          });
           
-          // If it's an auth error (e.g. CSRF, session expired), stop further sync attempts.
-          if (error.statusCode === 401 || error.statusCode === 403 || error.message.toLowerCase().includes('csrf')) {
+          console.error(`Failed to sync transaction ${tx.offline_id}:`, error);
+          
+          if (httpStatusCode === 401 || httpStatusCode === 403 || errorMessage.toLowerCase().includes('csrf')) {
             this.syncError = `Sync stopped due to authentication/authorization error on transaction ${tx.offline_id}: ${errorMessage}`;
-            // Optionally, clear the potentially invalid CSRF token from authStore
-            if (error.message.toLowerCase().includes('csrf')) authStore.clearCurrentUserCSRFToken(); // New action in authStore
+            if (errorMessage.toLowerCase().includes('csrf')) authStore.clearCurrentUserCSRFToken();
             break; 
           }
-          // For other errors, record the first one and continue (or break based on preference)
-          if (!this.syncError) { // Store only the first error encountered for general feedback
+          if (!this.syncError) {
             this.syncError = `Error syncing transaction ${tx.offline_id}: ${errorMessage}`;
           }
-          // For this implementation, we'll stop on the first error to alert the user.
-          // To continue syncing other transactions, remove the 'break;'
           break; 
         }
       }
 
       this.lastSyncTime = new Date().toISOString();
-      await this.loadPendingTransactionsCount(); // Refresh count
+      await this.loadPendingTransactionsCount(); 
 
       if (failureCount > 0) {
-        // syncError would already be set if we break on first error
-        if (!this.syncError) { // If we didn't break and had multiple failures
-             this.syncError = `${failureCount} transaction(s) failed to sync. ${successCount} synced.`;
+        if (!this.syncError) { 
+             this.syncError = `${failureCount} transaction(s) failed to sync. ${successCount} successfully synced.`;
         }
       } else if (successCount > 0) {
         this.syncSuccessMessage = `${successCount} transaction(s) synced successfully.`;
       } else if (pendingTransactions.length > 0 && successCount === 0 && failureCount === 0) {
-        // This case should ideally not be reached if loop runs and error handling is correct.
         this.syncError = "Sync process completed, but no transactions were processed. Check logs.";
       }
-
-
       this.isSyncing = false;
     },
   },

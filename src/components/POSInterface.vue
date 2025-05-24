@@ -51,15 +51,16 @@
 </template>
 
 <script setup>
-import { computed, watch, onMounted, onUnmounted } from 'vue'; // Added onUnmounted
+import { computed, watch, onMounted, onUnmounted, ref } from 'vue'; // Added ref
 import { useQuery } from '@tanstack/vue-query';
 import { fetchInitialPOSData } from '../services/api';
 import { useAuthStore } from '../store/authStore';
 import { useSyncConfigStore } from '../store/syncConfigStore';
 import { useDataStore } from '../store/dataStore';
 import { useUiStore } from '../store/uiStore'; 
-import { useSyncStore } from '../store/syncStore'; // Import sync store
+import { useSyncStore } from '../store/syncStore'; 
 import { useBarcodeScanner } from '../composables/useBarcodeScanner'; 
+import { useIdleTimer } from '../composables/useIdleTimer'; // Import Idle Timer
 
 import UserInfoHeader from './UserInfoHeader.vue';
 import SyncControls from './SyncControls.vue';

@@ -1,3 +1,46 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@media print {
+  body * {
+    visibility: hidden; /* Hide everything by default */
+    /* Consider removing backgrounds and shadows for all elements for print */
+    background: transparent !important;
+    color: #000 !important; /* Ensure text is black */
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  /* Class for the specific area to be printed */
+  .printable-receipt-area, .printable-receipt-area * {
+    visibility: visible; /* Show only the receipt and its children */
+  }
+
+  .printable-receipt-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%; /* Or a specific width like 72mm or 80mm if needed, though @page is better */
+    margin: 0;
+    padding: 0;
+    /* Ensure the receipt component itself dictates its dimensions and styling for print */
+  }
+  
+  /* Hide elements that should not appear on print, e.g., sidebars, headers, footers from the main app */
+  /* These would be more specific if you had classes on your main layout elements */
+  /* For example:
+  .admin-sidebar, .app-header, .app-footer {
+    display: none !important;
+  }
+  */
+
+  /* Page setup for thermal printers - often 72mm or 80mm width */
+  /* This helps control margins and page size if the printer driver doesn't override it */
+  @page {
+    size: 72mm auto; /* Example for 72mm width, height auto */
+    /* Or 'size: 80mm auto;' for 80mm printers */
+    /* Or 'size: 3.125in auto;' for approx 80mm */
+    margin: 2mm; /* Minimal margins, adjust as needed */
+  }
+}

@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
 import { useCartStore } from './cartStore';
 import { useDataStore } from './dataStore'; // For default customer info
-import * as localDB from '../utils/localDB'; // Corrected path
+import { useAuthStore } from './authStore'; // For clerk info
+import * as localDB from '../utils/localDB'; // Corrected path, includes logClerkActivity
 
 export const useHeldCartsStore = defineStore('heldCarts', {
   state: () => ({
@@ -11,8 +12,9 @@ export const useHeldCartsStore = defineStore('heldCarts', {
   actions: {
     async holdCurrentCart(optionalName = null) {
       this.isProcessing = true;
-      const cartStore = useCartStore(); // Get instance inside action
-      const dataStore = useDataStore(); // Get instance for default customer
+      const cartStore = useCartStore(); 
+      const dataStore = useDataStore(); 
+      const authStore = useAuthStore();
 
       if (cartStore.isCartEmpty) {
         alert("Cannot hold an empty cart.");
@@ -20,28 +22,39 @@ export const useHeldCartsStore = defineStore('heldCarts', {
         return;
       }
 
-      // Construct cartData from current cartStore state
       const cartDataToHold = {
-        items: JSON.parse(JSON.stringify(cartStore.cartItems)), // Deep copy
+        items: JSON.parse(JSON.stringify(cartStore.cartItems)), 
         customer: JSON.parse(JSON.stringify(cartStore.selectedCustomer)),
         payments: JSON.parse(JSON.stringify(cartStore.appliedPayments)),
-        // Include relevant totals from getters
         subtotal: cartStore.subtotal,
         taxes: cartStore.taxes,
         grandTotal: cartStore.grandTotal,
-        // any other relevant cart-specific info like discounts if they existed
       };
 
+      let savedHeldCartId = null; // To store the ID for logging
+      const cartNameForLog = optionalName || `Cart held at ${new Date().toLocaleTimeString()}`;
+
       try {
-        const defaultCartName = `Cart held at ${new Date().toLocaleTimeString()}`;
-        await localDB.saveHeldCart(cartDataToHold, optionalName || defaultCartName);
+        savedHeldCartId = await localDB.saveHeldCart(cartDataToHold, cartNameForLog);
         
-        await this.loadHeldCartsFromDB(); // Refresh the list of held carts
+        // Log activity
+        if (authStore.isLoggedIn && authStore.currentUser && savedHeldCartId) {
+          try {
+            await localDB.logClerkActivity(
+              authStore.currentUser.user_id,
+              authStore.currentUser.full_name,
+              'CART_HELD',
+              { heldCartId: savedHeldCartId, heldCartName: cartNameForLog, itemCount: cartDataToHold.items.length }
+            );
+          } catch (logError) {
+            console.error("Failed to log cart held activity:", logError);
+          }
+        }
         
-        // Clear the main cart and reset customer
-        cartStore.clearCart(); // This already clears items and payments
+        await this.loadHeldCartsFromDB(); 
         
-        // Reset selected customer to default after holding cart
+        await cartStore.clearCart(); // Ensure this is awaited if it becomes async due to logging
+        
         let defaultCustomerName = 'Walk-in';
         if (dataStore.activePOSProfileDetails && dataStore.activePOSProfileDetails.default_customer) {
             defaultCustomerName = dataStore.activePOSProfileDetails.default_customer;
@@ -72,7 +85,7 @@ export const useHeldCartsStore = defineStore('heldCarts', {
       } catch (error) {
         console.error('Error loading held carts from DB:', error);
         alert(`Failed to load held carts: ${error.message}`);
-        this.heldCartsList = []; // Reset on error
+        this.heldCartsList = []; 
       } finally {
         this.isProcessing = false;
       }
@@ -80,7 +93,8 @@ export const useHeldCartsStore = defineStore('heldCarts', {
 
     async resumeCart(heldCartId) {
       this.isProcessing = true;
-      const cartStore = useCartStore(); // Get instance inside action
+      const cartStore = useCartStore(); 
+      const authStore = useAuthStore();
       
       const heldCart = this.heldCartsList.find(cart => cart.id === heldCartId);
       if (!heldCart) {
@@ -90,14 +104,28 @@ export const useHeldCartsStore = defineStore('heldCarts', {
       }
 
       try {
-        // Ensure cartStore has the action to load the state
         if (typeof cartStore.loadCartFromHold !== 'function') {
             throw new Error("cartStore.loadCartFromHold action is not defined.");
         }
         cartStore.loadCartFromHold(heldCart.cart_data);
         
         await localDB.deleteHeldCart(heldCartId);
-        await this.loadHeldCartsFromDB(); // Refresh list
+
+        // Log activity
+        if (authStore.isLoggedIn && authStore.currentUser) {
+          try {
+            await localDB.logClerkActivity(
+              authStore.currentUser.user_id,
+              authStore.currentUser.full_name,
+              'CART_RESUMED',
+              { heldCartId: heldCartId, heldCartName: heldCart.name }
+            );
+          } catch (logError) {
+            console.error("Failed to log cart resumed activity:", logError);
+          }
+        }
+
+        await this.loadHeldCartsFromDB(); 
 
         alert('Cart resumed successfully.');
       } catch (error) {
@@ -110,9 +138,27 @@ export const useHeldCartsStore = defineStore('heldCarts', {
 
     async deleteCartFromHold(heldCartId) {
       this.isProcessing = true;
+      const authStore = useAuthStore();
+      const cartToDelete = this.heldCartsList.find(cart => cart.id === heldCartId); // For logging name
+
       try {
         await localDB.deleteHeldCart(heldCartId);
-        await this.loadHeldCartsFromDB(); // Refresh list
+
+        // Log activity
+        if (authStore.isLoggedIn && authStore.currentUser) {
+          try {
+            await localDB.logClerkActivity(
+              authStore.currentUser.user_id,
+              authStore.currentUser.full_name,
+              'CART_DELETED_FROM_HOLD',
+              { heldCartId: heldCartId, heldCartName: cartToDelete?.name || 'Unknown' }
+            );
+          } catch (logError) {
+            console.error("Failed to log cart deleted from hold activity:", logError);
+          }
+        }
+        
+        await this.loadHeldCartsFromDB(); 
         alert('Held cart deleted successfully.');
       } catch (error) {
         console.error('Error deleting held cart:', error);

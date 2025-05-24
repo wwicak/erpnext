@@ -1,168 +1,181 @@
-# Tauri Offline POS Application
+# Vue 3 Offline-First POS System for ERPNext
 
-This application provides an offline-first Point of Sale (POS) interface that syncs with an ERPNext backend. It allows users to conduct sales even when network connectivity is unavailable and syncs transactions once connectivity is restored.
+## Overview
+
+This is an offline-first Point of Sale (POS) application designed to integrate with an ERPNext backend. It's built with modern web technologies, allowing for a responsive user experience and robust offline capabilities. Clerks can make sales even without an active internet connection, and these transactions can be synced to ERPNext later. The application also includes an Admin Panel for configuration and monitoring.
+
+**Key Technologies:** Vue 3, Vite, Pinia (state management), Vue Router, Tailwind CSS (styling), TanStack Vue Query (data fetching/caching), and `wa-sqlite` (for client-side SQLite database via WASM, enabling offline storage).
 
 ## Features
 
-*   **Offline First:** Core POS operations (browsing items, creating sales, processing payments) are available without an active internet connection.
-*   **ERPNext Integration:** Synchronizes products, pricing, customers, and transactions with your ERPNext instance.
-*   **User Authentication:** Secure login for POS attendants, with session logging on the backend.
-*   **Barcode Scanning:** Quickly add items to the cart using a barcode scanner (keyboard wedge type).
-*   **Enhanced Quantity Input:** Easily adjust item quantities in the cart using typed input or +/- buttons.
-*   **Price Check:** Look up item prices without adding them to the cart.
-*   **Hold & Resume Cart:** Save in-progress sales and resume them later.
-*   **Default Customer:** Streamlined workflow with a configurable default "Walk-in Customer".
-*   **Customizable Receipt Printing:** Print sales receipts using templates configured in ERPNext.
-*   **Local Data Storage:** Uses IndexedDB to store POS data locally on the device.
+### POS Interface (for Clerks)
+*   **Login/Logout:** Secure login for POS clerks. Includes an automatic logout feature based on inactivity, configurable by an admin.
+*   **Offline Sale Completion:** Core sales operations (adding items, processing payments) function without an active internet connection. Transactions are saved locally.
+*   **Item Search & Barcode Scanning:** Efficiently find items by name, code, or by using a USB barcode scanner (HID keyboard wedge type).
+*   **Cart Management:** Add items, update quantities with +/- buttons or direct input, remove items, and clear the entire cart.
+*   **Payment Processing:** Supports multiple payment modes (configurable if linked to POS Profile in ERPNext).
+*   **Hold & Resume Cart:** Save in-progress sales locally and resume them later, allowing multiple customers to be handled efficiently.
+*   **Price Check:** Quickly look up item prices without adding them to the cart.
+*   **Synchronization:** Sync completed offline sales with the ERPNext server when connectivity is available.
 
-## Prerequisites
+### Admin Panel
+*   **Secure Admin Login:** Dedicated login for administrators with a default password that must be changed on first login.
+*   **ERPNext URL Configuration:** Set and test the connection to the ERPNext server.
+*   **Barcode Scanner Setup Guide & Test:** Provides information on configuring common USB barcode scanners and an area to test scanner input.
+*   **Receipt Printer Setup Guide & Test Print:** Guides on setting up thermal receipt printers using browser-based printing and allows printing a sample receipt.
+*   **Clerk Activity Logging & Viewing:** Tracks key clerk actions (logins, logouts, sales, cart operations) locally for audit and review.
+*   **Daily Sales Report:** View a summary of sales transactions grouped by date, sourced from local offline transaction data.
+*   **API Sync Log Viewing:** View logs of attempts to sync offline sales to ERPNext, including success/failure status and error messages.
+*   **Auto-Logout Configuration:** Set the inactivity timeout duration for automatic logout of POS clerks.
 
-To develop and build the Tauri Offline POS application, you will need:
+## Prerequisites (Development)
 
-*   **Node.js and npm (or yarn/pnpm):** For managing frontend dependencies and running scripts.
-    *   [Node.js Download](https://nodejs.org/)
-*   **Rust:** The backend of the Tauri application is written in Rust.
-    *   [Install Rust](https://www.rust-lang.org/tools/install)
-*   **Tauri CLI Prerequisites:** System-specific dependencies (e.g., WebView2 for Windows, WebKitGTK for Linux, Xcode Command Line Tools for macOS).
-    *   Follow the "Prerequisites" guide on the [official Tauri website](https://tauri.app/v1/guides/getting-started/prerequisites).
-*   **Tauri CLI:**
+*   **Node.js:** Version 18.x or later recommended.
+*   **npm** (usually comes with Node.js) or **yarn**.
+
+## Project Setup and Installation (Development)
+
+1.  **Clone the Repository:**
     ```bash
-    npm install -g @tauri-apps/cli
-    # or
-    yarn global add @tauri-apps/cli
+    git clone <repository-url>
+    cd <repository-name>
     ```
 
-## Development
+2.  **Navigate to the Frontend Project Directory:**
+    The Vue 3 application is located in the `/src` directory of this project structure. However, `package.json` and `vite.config.js` are at the root. So, commands should be run from the root.
+    ```bash
+    # cd <repository-name> # (You should already be here)
+    ```
 
-1.  **Clone the repository (if applicable).**
-2.  **Install frontend dependencies:**
+3.  **Install Dependencies:**
     ```bash
     npm install
     # or
     yarn install
     ```
-3.  **Run the application in development mode:**
+
+4.  **Run the Development Server:**
     ```bash
-    npm run tauri dev
+    npm run dev
     # or
-    yarn tauri dev
+    yarn dev
     ```
-    This will open the application window. Changes to frontend code (in `src/`) should trigger hot reloading.
 
-## Building for Production
+5.  Open your browser and navigate to the URL provided by Vite (typically `http://localhost:5173` or similar).
 
-To build the application for your target operating system:
+## Configuration
 
-```bash
-npm run tauri build
-# or
-yarn tauri build
-```
+### 1. Connecting POS to ERPNext
+*   The primary setting required is the **ERPNext Server URL**.
+*   After logging into the Admin Panel, navigate to **Settings > ERPNext Configuration**.
+*   Enter the full URL of your ERPNext instance (e.g., `https://your-company.erpnext.com` or `http://localhost:8000`).
+*   Click "Save & Test Connection" to verify and save the URL. This URL is stored locally in the browser's `localStorage`.
+*   **POS Profile & Company for Sync:** These settings (visible read-only in Admin's ERPNext Config page) are typically configured by the POS Clerk via the "Sync Controls" in the POS interface after they log in. This allows different POS terminals/clerks to use different POS Profiles.
 
-Build artifacts (e.g., `.msi` for Windows, `.AppImage` or `.deb` for Linux, `.dmg` for macOS) will be in `src-tauri/target/release/bundle/`.
+### 2. Barcode Scanner Setup
+*   Refer to **Admin Panel > Settings > Barcode Settings** for guidance and a test area.
+*   Most USB barcode scanners function as Human Interface Devices (HID), emulating keyboard input. They are usually plug-and-play.
+*   **Crucial Recommendation:** Configure your scanner to send an **"Enter" (Carriage Return/Line Feed) suffix** after each scan. This allows the application to reliably detect the end of a barcode input, especially for the global scanner listener in the POS interface. Consult your scanner's manual for instructions (often involves scanning configuration barcodes).
+*   **Troubleshooting:**
+    *   Ensure your OS recognizes the scanner.
+    *   Test if the scanner types into a simple text editor (e.g., Notepad, TextEdit). If not, it's a system/scanner configuration issue.
+    *   Ensure the scanner's output language/layout matches your system's keyboard layout.
 
-## Initial Setup & Configuration
+### 3. Receipt Printer Setup
+*   Refer to **Admin Panel > Settings > Printer Settings** for guidance and a test print button.
+*   The application uses the browser's built-in print functionality (`window.print()`).
+*   **Setup Guide:**
+    1.  Install your receipt printer (typically thermal or dot-matrix, e.g., 72mm or 80mm width) in your operating system.
+    2.  In the OS printer settings, set the correct paper size (e.g., "72mm x Receipt", "80mm x Receipt", or a custom size matching your paper roll).
+    3.  Set margins to "None" or the minimum possible.
+    4.  Set scale to 100% or "Actual Size".
+    5.  In the browser's print preview dialog (appears when you print):
+        *   Select your receipt printer.
+        *   Verify paper size and orientation (usually Portrait).
+        *   Set margins to "None" or "Minimum".
+        *   Disable "Headers and footers".
+        *   Ensure scale is 100%.
+    *   For a smoother experience, you can set your receipt printer as the **default printer** in your OS if this computer is primarily for POS use.
+*   **Troubleshooting:**
+    *   Check the OS printer queue for errors.
+    *   Use the "Test Print Sample Receipt" button in the Admin Panel. Carefully examine the browser's print preview.
+    *   If text is cut off or formatting is incorrect, the issue is almost always related to paper size, margins, or scale settings in the OS printer properties or the browser's print dialog.
 
-### 1. ERPNext Backend Setup
-Ensure the corresponding `erpnext.pos_custom_api` Python module is installed on your ERPNext instance. This module provides the necessary API endpoints for the POS application. Refer to `POS_CUSTOM_API.md` for details.
-You will also need to manually create the following in ERPNext:
-*   **DocTypes:**
-    *   `POS Session Log` (for audit trails of logins).
-    *   `POS Receipt Template` (for customizing printed receipts).
-    (See `POS_CUSTOM_API.md` for schema details of these DocTypes).
-*   **Custom Fields:**
-    *   On `Sales Invoice` and/or `POS Invoice`: `custom_pos_attendant` (Link to User, Label: "POS Attendant").
-    *   On `Selling Settings`: `pos_walk_in_customer` (Link to Customer, Label: "POS Walk-in Customer").
+### 4. Admin Panel First Login
+*   Navigate to `/admin` or `/admin/login`.
+*   Default credentials:
+    *   Username: `admin`
+    *   Password: `passwordChange123`
+*   You will be **mandatorily redirected to change this default password** after your first successful login. This is crucial for security.
 
-### 2. Tauri Application Configuration
+### 5. Auto-Logout Configuration
+*   The automatic logout timer for inactive POS clerks can be configured in the **Admin Panel > Settings > App Settings**.
+*   Enter the desired timeout duration in minutes. Setting it to `0` disables the auto-logout feature.
+*   This setting is stored locally in the browser's `localStorage`.
 
-Upon first launch, you need to configure the application:
+## Usage
 
-*   **ERPNext Server URL:** Enter the full URL of your ERPNext server (e.g., `https://your-erp.com` or `http://localhost:8000`). This field is located in the header bar of the main POS interface (visible after login).
-*   Click **"Save Sync Config"** after entering the URL. This setting is stored locally.
+### POS Clerk Interface
+1.  **Login:** Access the POS via the root path (`/`). Enter your ERPNext username, password, and the POS Profile name configured for your terminal/role.
+2.  **Initial Data Sync:** After login, essential data (items, prices, customers, etc.) is fetched from ERPNext based on your POS Profile. This may take a moment. A loading indicator will be shown.
+3.  **Adding Items:**
+    *   Use the search bar in the left panel to find items by name or code.
+    *   Scan item barcodes using a configured USB scanner.
+    *   Click "Add to Cart" on an item card.
+4.  **Cart Management:**
+    *   Adjust quantities using the input field or +/- buttons next to each item in the cart (right panel).
+    *   Remove items by clicking the "Remove" button.
+5.  **Customer:** A default customer (e.g., "Walk-in Customer") is usually pre-selected. Customer selection features can be expanded.
+6.  **Hold/Resume:**
+    *   Click "Hold Cart" to save the current cart locally and clear the interface for a new sale.
+    *   Click "View/Resume Carts" to open a modal listing all held carts. You can resume or delete them.
+7.  **Payments & Completion:**
+    *   Once all items are added, use the "Payment" section to add payments by mode (e.g., Cash, Card).
+    *   The system calculates Total Paid, Balance Due, and Change.
+    *   Click "Complete Sale" when payment is sufficient. The sale is saved locally in the offline database.
+8.  **Receipt Printing:** A receipt should be triggered for printing via the browser's print dialog after sale completion (ensure printer is configured).
+9.  **Sync Controls (Header):**
+    *   Displays ERPNext URL, POS Profile, and Company used for initial data sync. These can be reconfigured here if needed, followed by "Save Sync Config".
+    *   "Sync Offline Sales" button: Manually triggers the synchronization of locally saved sales to ERPNext. Displays pending count and sync status.
 
-## User Authentication & Login
+### Admin Panel Interface
+1.  **Login:** Navigate to `/admin/login` and use the admin credentials. Change password if it's the first login.
+2.  **Dashboard:** A placeholder welcome page.
+3.  **Change Password:** Allows changing the admin password.
+4.  **Settings:**
+    *   **ERPNext Configuration:** Manage and test the ERPNext server URL.
+    *   **Barcode Settings:** View setup advice and test your barcode scanner.
+    *   **Printer Settings:** View setup advice for receipt printers and print a test receipt.
+    *   **App Settings:** Configure application-level settings like the POS clerk auto-logout timer.
+5.  **System Logs:**
+    *   **Clerk Activity Log:** View a log of clerk actions (logins, sales, etc.).
+    *   **API Sync Log:** View detailed logs of attempts to sync offline sales to ERPNext.
+6.  **Reports:**
+    *   **Daily Sales Report:** View a summary of total sales per day, based on locally stored transactions.
+7.  **Logout:** Use the "Logout" button in the sidebar to securely log out of the Admin Panel.
 
-Before accessing the main POS interface, users must log in:
+## Technologies Used
 
-1.  **Launch the application.** You will be presented with a login screen.
-2.  **Username:** Enter your ERPNext username.
-3.  **Password:** Enter your ERPNext password.
-4.  **POS Profile:** Enter the exact name of the POS Profile configured in ERPNext that this terminal session should use. This profile dictates settings like default warehouse, pricing, available payment modes, etc.
-5.  Click **"Login"**.
+*   **Vue 3:** Progressive JavaScript framework for building the user interface.
+*   **Vite:** Fast frontend build tool and development server.
+*   **Pinia:** State management library for Vue.js.
+*   **Vue Router:** Official router for Vue.js.
+*   **Tailwind CSS:** Utility-first CSS framework for styling.
+*   **TanStack Vue Query:** For data fetching, caching, and server state management (used for initial data sync).
+*   **`wa-sqlite`:** WebAssembly (WASM) build of SQLite, enabling a full SQLite database to run in the browser for robust offline storage. Persisted via IndexedDB.
 
-Upon successful authentication:
-*   The main POS interface will be displayed.
-*   Your full name and the active POS Profile name will be shown in the header.
-*   An initial data synchronization process will be automatically triggered to fetch data relevant to the logged-in POS Profile, including the receipt template.
+## Troubleshooting (General)
 
-### Logout
-*   To log out, click the **"Logout"** button in the header.
-*   This will clear your session and return you to the login screen.
+*   **Connection Issues:** Ensure the ERPNext URL configured in the Admin Panel is correct and that your ERPNext server is running and accessible from the device running the POS.
+*   **Browser Console:** For any unexpected behavior, open your browser's developer tools (usually by pressing F12) and check the "Console" tab for error messages.
+*   **Hardware Issues (Scanner, Printer):**
+    *   **Scanner:** Test if it types correctly into a simple text editor first. If not, it's likely a scanner configuration or OS driver issue.
+    *   **Printer:** Print a test page from your operating system's printer settings to confirm basic printer functionality. Then, check browser print preview settings carefully.
+*   **Data Not Syncing:**
+    *   Check the Admin Panel > API Sync Log for detailed error messages from ERPNext.
+    *   Ensure your ERPNext server is reachable and the POS user has the necessary permissions.
+    *   Verify the CSRF token handling if POST/PUT requests are failing (though this is largely handled internally).
 
-## Usage Guide
+---
 
-### 1. Initial Data Sync
-*   After a successful login, an initial data sync is automatically attempted. This fetches items, prices, customers, stock levels, payment modes, tax templates, company settings, and the relevant receipt template.
-*   You can also manually trigger a sync or update sync configurations (ERPNext URL, POS Profile for sync, Company for sync) using the controls in the header bar of the main POS interface.
-*   Click **"Sync Initial Data"** to fetch/update local data stores.
-*   A status message will indicate progress and completion. This step is crucial for offline functionality.
-
-### 2. Customer Handling
-*   Customer selection is optional.
-*   By default, sales will be associated with a "Walk-in Customer". This default is configured in ERPNext (either in the POS Profile or globally in Selling Settings) and fetched during initial sync.
-*   The name of the active customer is displayed in the cart panel.
-
-### 3. Adding Items to Cart
-*   **Searching:** Use the search bar in the "Items" panel to find items by name or code.
-*   **Barcode Scanning:** Scan an item's barcode. The item will be added to the cart, or its quantity incremented if already present. The item search bar can also accept barcode scans.
-*   **Clicking Item Card:** Click on an item card from the displayed list to add it to the cart.
-*   **Quantity Input:** Adjust quantity using the input field or +/- buttons in the cart. Scanning an item already in the cart increments its quantity.
-*   **Stock Warnings:** Local stock levels are checked. If insufficient and server disallows negative stock, a warning may appear. The item can still be added, but sync might fail if stock is unavailable on the server.
-
-### 4. Price Check
-*   Click the **"Price Check"** button.
-*   Scan a barcode or type an item code/name into the modal and lookup.
-*   Item details and price (based on current POS context) are displayed.
-
-### 5. Hold & Resume Cart
-*   **Holding:** Click **"Hold Cart"**. Optionally name the cart. The current cart is saved locally, and the main cart interface clears.
-*   **Viewing & Resuming:** Click **"View/Resume Carts"**. A modal lists held carts. Click "Resume" to load a cart (confirming discard of current cart if not empty) or "Delete" to remove it.
-
-### 6. Processing Payments & Completing Sale
-*   Select payment mode(s) and enter amounts.
-*   Click **"Complete Sale"**. The transaction is saved locally.
-*   An alert confirms the offline sale. Receipt printing (if configured) is triggered.
-
-### 7. Receipt Printing
-*   **Configuration:** Receipt layouts are managed in ERPNext via the "POS Receipt Template" Doctype. Templates can be linked to a POS Profile or set as a company default. The relevant template is fetched during initial data sync.
-*   **Automatic Printing:** Printing usually occurs automatically after a sale is completed. (Note: An application-level setting to control auto-print is a conceptual future enhancement).
-*   **Reprinting:** A "Print Last Receipt" button allows reprinting the last completed transaction's receipt.
-*   **Printer Setup (User Guidance):**
-    *   Ensure your POS printer (thermal/dot-matrix, typically 76-80mm width) is installed and configured in your operating system.
-    *   The application uses the OS's standard print dialog. Select your POS printer in this dialog.
-    *   For a smoother experience, consider setting your POS printer as the default printer in your OS settings.
-    *   The generated receipt HTML is optimized for narrow paper common in POS printers.
-
-### 8. Syncing Offline Transactions
-*   Offline transactions are stored locally and are intended to be synced with ERPNext when connectivity is available.
-*   (Note: The UI for manually triggering the sync of pending transactions or viewing detailed sync status is a future enhancement. Currently, sync is primarily managed during the initial data load after login or via the manual "Sync Initial Data" button which would also sync pending transactions if that logic is added to `syncOfflineTransactions`'s caller).
-
-## Local Data Storage (IndexedDB)
-
-The application uses IndexedDB (via Dexie.js) to store data locally for offline use:
-
-*   **`pos_profiles`**: Configuration of the POS terminal.
-*   **`items`**: Product catalog, including details, UOMs, `barcodes_searchable` array.
-*   **`item_prices`**: Pricing rules.
-*   **`customers`**: Customer information.
-*   **`warehouses`**: Warehouse details.
-*   **`stock_levels`**: Snapshots of item quantities.
-*   **`payment_modes`**: Available payment methods.
-*   **`tax_templates`**: Tax templates.
-*   **`company_settings`**: ERPNext company settings (e.g., `allow_negative_stock`, `pos_walk_in_customer`).
-*   **`offline_transactions`**: Sales made while offline.
-*   **`held_carts`**: Temporarily saved carts.
-*   **`receipt_template_data`**: (Conceptual - could be stored in `localStorage` or a dedicated store if fetched separately, currently part of initial sync payload and used directly).
-
-This local data enables the POS to function without an active internet connection.
+This README provides a comprehensive guide to the Vue 3 Offline-First POS System. For specific API details or backend setup for ERPNext, refer to any accompanying backend documentation.
